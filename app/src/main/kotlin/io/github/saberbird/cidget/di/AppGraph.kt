@@ -4,6 +4,15 @@ import android.app.Application
 import android.content.pm.ApplicationInfo
 import android.util.Log
 import io.github.saberbird.cidget.data.KeystoreKeyProvider
+import io.github.saberbird.cidget.data.RefreshRepository
+import io.github.saberbird.cidget.data.RepoFetcher
+import io.github.saberbird.cidget.data.SettingsRepository
+import io.github.saberbird.cidget.data.SnapshotStore
+import io.github.saberbird.cidget.widget.CidgetWidget
+import androidx.glance.appwidget.updateAll
+import kotlinx.datetime.Clock
+import io.github.saberbird.cidget.github.fetchRepoState
+import io.github.saberbird.cidget.work.RefreshScheduler
 import io.github.saberbird.cidget.data.TokenStore
 import io.github.saberbird.cidget.github.GitHubClient
 import io.github.saberbird.cidget.github.createHttpClient
@@ -27,12 +36,33 @@ class AppGraph(val app: Application) {
     /** The API client. In debug builds it logs `GET path -> code` lines only (never headers or bodies). */
     val github: GitHubClient = GitHubClient(http, log = if (debuggable) { line -> Log.d("cidget", line) } else null)
 
+    val snapshots: SnapshotStore = SnapshotStore(File(app.filesDir, "snapshots"))
+
+    val settings: SettingsRepository = SettingsRepository(app)
+
+    /** Redraws every widget from the local stores. */
+    suspend fun updateWidgets() = CidgetWidget().updateAll(app)
+
+    val refresh: RefreshRepository = RefreshRepository(
+        tokens = tokenStore,
+        snapshots = snapshots,
+        fetcher = RepoFetcher { owner, repo, s -> github.fetchRepoState(owner, repo, s) },
+        clock = Clock.System,
+        onChanged = ::updateWidgets,
+    )
+
+    /** Queues a refresh for [repo] (`owner/repo`). */
+    fun refreshNow(repo: String) = RefreshScheduler.refreshNow(app, repo)
+
     /** Drops cached API responses; they may hold private repository data. */
     suspend fun evictHttpCache() = withContext(Dispatchers.IO) { runCatching { http.cache?.evictAll() }; Unit }
 
-    /** Called after the token was saved, replaced or deleted. Later tasks add snapshots and refreshes here. */
+    /** Called after the token was saved, replaced or deleted. Clears private data, redraws widgets and refreshes. */
     suspend fun onTokenChanged() {
         evictHttpCache()
+        snapshots.deleteAll()
+        updateWidgets()
+        if (tokenStore.hasToken()) settings.reposInUse().forEach(::refreshNow)
     }
 
     private fun versionName(): String =

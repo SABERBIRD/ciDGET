@@ -52,7 +52,7 @@ public class GitHubClient(
             val request = Request.Builder().url(url).get().build()
             http.newCall(request).await().use { response ->
                 meta = parseMeta(response.headers, response.networkResponse?.code == 304)
-                log?.invoke("GET ${url.encodedPath} -> ${response.code}")
+                log?.invoke("GET ${url.encodedPath} -> ${response.code} (network ${response.networkResponse?.code})")
                 if (!response.isSuccessful) {
                     ApiResult.Err(mapHttpError(response.code, response.headers, clock.now()), meta)
                 } else {
