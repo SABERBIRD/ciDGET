@@ -99,6 +99,20 @@ private fun statusRole(s: Status): UiRole = when (s) {
     Status.GREY -> UiRole.GREY
 }
 
+/**
+ * The foot of the branch and repo lists: the prompt on the left, the buttons on the right. The age or error text
+ * goes into the same (lowest) line when it fits between them, else into a line of its own above.
+ */
+private fun footWithMeta(prompt: UiSpan, buttons: List<UiSpan>, meta: String, cpl: Int): List<UiLine> {
+    if (meta.isEmpty()) return listOf(UiLine(listOf(prompt), buttons))
+    val used = displayWidth(prompt.text) + 1 + displayWidth(meta) + 1 + buttons.sumOf { displayWidth(it.text) }
+    return if (used <= cpl) {
+        listOf(UiLine(listOf(prompt), listOf(span(meta, UiRole.DIM), span(" ")) + buttons))
+    } else {
+        listOf(line(meta, UiRole.DIM), UiLine(listOf(prompt), buttons))
+    }
+}
+
 private fun branchesScreen(e: UiEnv): UiScreen {
     val repo = e.config.repo
     val tokenPresent = e.tokenState != null
@@ -110,9 +124,8 @@ private fun branchesScreen(e: UiEnv): UiScreen {
     } else {
         emptyList()
     }
-    val foot = mutableListOf(UiLine(listOf(prompt), refresh))
     val meta = metaLine(e.ctx, e.snapshot, tokenPresent, tokenInvalid, e.now)
-    if (meta.isNotEmpty()) foot += line(meta, UiRole.DIM)
+    val foot = footWithMeta(prompt, refresh, meta, e.cpl)
     val snapshot = e.snapshot
     val body = when {
         repo == null -> listOf(line(e.str(R.string.w_pick_repo), UiRole.DIM, go(WidgetView.REPOS)))
@@ -153,16 +166,17 @@ private fun branchRows(e: UiEnv, repo: String, snapshot: RepoSnapshot): List<UiL
 
 private fun reposScreen(e: UiEnv): UiScreen {
     val list = e.repoList
-    val head = UiLine(
-        listOf(span(e.str(R.string.w_ls_prompt), UiRole.PROMPT)),
-        listOf(span("[${e.glyphs.settings}]", UiRole.DIM, go(WidgetView.SETTINGS)), span(" "), span("[x]", UiRole.DIM, go(WidgetView.BRANCHES))),
-    )
     val meta = buildList {
         list.fetchedAt?.let { add(e.str(R.string.w_age_ago, formatAge(it, e.now))) }
         if (list.refreshing) add("[...]")
         list.error?.let { add(it.widgetText(e.ctx)) }
     }.joinToString(" · ")
-    val foot = listOf(head) + if (meta.isNotEmpty()) listOf(line(meta, UiRole.DIM)) else emptyList()
+    val foot = footWithMeta(
+        span(e.str(R.string.w_ls_prompt), UiRole.PROMPT),
+        listOf(span("[${e.glyphs.settings}]", UiRole.DIM, go(WidgetView.SETTINGS)), span(" "), span("[x]", UiRole.DIM, go(WidgetView.BRANCHES))),
+        meta,
+        e.cpl,
+    )
     val body = when {
         e.tokenState == null -> listOf(line(e.str(R.string.w_set_token), UiRole.DIM, go(WidgetView.SETTINGS)))
         list.repos.isEmpty() ->

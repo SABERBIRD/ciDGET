@@ -116,7 +116,7 @@ private fun GlanceLine(line: UiLine, context: Context, appWidgetId: Int, sp: Int
 
 @Composable
 private fun GlanceSpan(span: UiSpan, context: Context, appWidgetId: Int, sp: Int, wrap: Boolean) {
-    var modifier = GlanceModifier
+    var modifier: GlanceModifier = GlanceModifier
     if (wrap) modifier = modifier.fillMaxWidth()
     span.cells?.let { n ->
         val widthDp = n * sp * context.resources.configuration.fontScale * Glyphs.advanceRatio
