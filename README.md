@@ -16,7 +16,9 @@ updated 2m ago
 - No server, no OAuth app: a read-only fine-grained Personal Access Token is stored encrypted on the device.
 - Not on Google Play: APKs are built by GitHub Actions and installed manually.
 
-**Status: design phase.** No app code exists yet. The design is in [`docs/`](docs/) and the implementation tasks are in [`docs/TASKS.md`](docs/TASKS.md).
+> ## ⚠️ THE APP IS SIGNED WITH A PUBLIC KEY. THE KEY IS COMMITTED TO THIS REPOSITORY, SO ANYONE CAN SIGN AN APK WITH IT. A VALID SIGNATURE IS **NOT** PROOF THAT AN APK COMES FROM THIS PROJECT. INSTALL ONLY FROM <https://github.com/SABERBIRD/ciDGET/releases>, NEVER FROM A CHAT, A FILE-SHARING SITE OR ANY OTHER SOURCE. A FAKE APK SIGNED WITH THIS KEY CAN REPLACE THE APP AND READ YOUR TOKENS.
+
+**Status: MVP in progress** (branch `dev`). The design is in [`docs/`](docs/) and the implementation tasks are in [`docs/TASKS.md`](docs/TASKS.md).
 
 ## Documentation
 
