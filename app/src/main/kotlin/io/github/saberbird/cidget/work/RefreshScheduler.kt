@@ -1,10 +1,8 @@
 package io.github.saberbird.cidget.work
 
 import android.content.Context
-import androidx.work.Constraints
 import androidx.work.CoroutineWorker
 import androidx.work.ExistingWorkPolicy
-import androidx.work.NetworkType
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.OutOfQuotaPolicy
 import androidx.work.WorkManager
@@ -30,11 +28,10 @@ class RefreshWorker(context: Context, params: WorkerParameters) : CoroutineWorke
 
 /** Enqueues refresh work. Only the one-time path exists so far; periodic refresh arrives in T11. */
 object RefreshScheduler {
-    /** Expedited unique work `refresh:{repo}`; a second request while one is queued is ignored (KEEP). */
+    /** Expedited unique work `refresh:{repo}`; a second request while one is queued is ignored (KEEP). No network constraint: offline attempts fail fast, record `! offline` and retry with backoff. */
     fun refreshNow(context: Context, repo: String) {
         val request = OneTimeWorkRequestBuilder<RefreshWorker>()
             .setInputData(workDataOf(RefreshWorker.KEY_REPO to repo))
-            .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
             .setExpedited(OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST)
             .build()
         WorkManager.getInstance(context).enqueueUniqueWork("refresh:$repo", ExistingWorkPolicy.KEEP, request)

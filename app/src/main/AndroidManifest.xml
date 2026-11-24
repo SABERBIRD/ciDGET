@@ -20,6 +20,12 @@
             </intent-filter>
         </activity>
 
+        <activity
+            android:name=".widget.config.RepoPickerActivity"
+            android:excludeFromRecents="true"
+            android:exported="false"
+            android:theme="@android:style/Theme.Material.Dialog" />
+
         <receiver
             android:name=".widget.CidgetWidgetReceiver"
             android:exported="true"

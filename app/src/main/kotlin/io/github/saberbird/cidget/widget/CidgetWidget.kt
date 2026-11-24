@@ -1,44 +1,41 @@
 package io.github.saberbird.cidget.widget
 
 import android.content.Context
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.unit.sp
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.glance.GlanceId
-import androidx.glance.GlanceModifier
 import androidx.glance.appwidget.GlanceAppWidget
+import androidx.glance.appwidget.GlanceAppWidgetManager
 import androidx.glance.appwidget.provideContent
-import androidx.glance.background
-import androidx.glance.layout.Alignment
-import androidx.glance.layout.Box
-import androidx.glance.layout.fillMaxSize
-import androidx.glance.layout.padding
-import androidx.glance.text.FontFamily
-import androidx.glance.text.Text
-import androidx.glance.text.TextStyle
-import androidx.glance.unit.ColorProvider
-import androidx.compose.ui.unit.dp
-import io.github.saberbird.cidget.core.Terminal
+import io.github.saberbird.cidget.graph
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.datetime.Clock
 
-/** The skeleton widget: renders only the terminal prompt. It reads no network and no stores. */
+/**
+ * The list widget. It never touches the network: it reads the widget's repo, the snapshot and the token
+ * state from local stores, so it renders instantly from cache (also right after a reboot).
+ */
 class CidgetWidget : GlanceAppWidget() {
     override suspend fun provideGlance(context: Context, id: GlanceId) {
+        val graph = context.graph
+        val appWidgetId = GlanceAppWidgetManager(context).getAppWidgetId(id)
+        val initialRepo = graph.settings.getWidgetRepo(appWidgetId)
+        val initialSnapshot = initialRepo?.let { graph.snapshots.get(it) }
         provideContent {
-            Box(
-                modifier = GlanceModifier
-                    .fillMaxSize()
-                    .background(Color(0xFF101214))
-                    .padding(8.dp),
-                contentAlignment = Alignment.CenterStart,
-            ) {
-                Text(
-                    text = Terminal.WIDGET_TEXT,
-                    style = TextStyle(
-                        color = ColorProvider(Color(0xFF58A6FF)),
-                        fontFamily = FontFamily.Monospace,
-                        fontSize = 13.sp,
-                    ),
-                )
-            }
+            val repo by graph.settings.widgetRepo(appWidgetId).collectAsState(initialRepo)
+            val snapshots = remember(repo) { repo?.let { graph.snapshots.observe(it) } ?: flowOf(null) }
+            val snapshot by snapshots.collectAsState(if (repo == initialRepo) initialSnapshot else null)
+            val token by graph.tokenStore.summary.collectAsState()
+            WidgetContent(
+                appWidgetId = appWidgetId,
+                repo = repo,
+                snapshot = snapshot,
+                tokenPresent = token != null,
+                tokenInvalid = token?.state == io.github.saberbird.cidget.data.TokenState.INVALID,
+                now = Clock.System.now(),
+                glyphs = Glyphs.system,
+            )
         }
     }
 }

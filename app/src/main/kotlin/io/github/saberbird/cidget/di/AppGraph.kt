@@ -51,6 +51,11 @@ class AppGraph(val app: Application) {
         onChanged = ::updateWidgets,
     )
 
+    /** Manual refresh: shows `[...]` immediately, then queues the work. */
+    suspend fun requestRefresh(repo: String) {
+        if (refresh.prepare(repo)) refreshNow(repo)
+    }
+
     /** Queues a refresh for [repo] (`owner/repo`). */
     fun refreshNow(repo: String) = RefreshScheduler.refreshNow(app, repo)
 

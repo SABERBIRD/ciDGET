@@ -30,16 +30,32 @@ class RefreshRepository(
     private val clock: Clock,
     private val onChanged: suspend () -> Unit,
 ) {
-    suspend fun refresh(repo: String): RefreshOutcome {
+    /** True if [repo] may be refreshed now: a usable token exists and no rate-limit wait is running. */
+    private suspend fun canRefresh(repo: String): Boolean {
         val summary = tokens.summary.value
-        if (summary == null || summary.state == TokenState.INVALID) return RefreshOutcome.SUCCESS
-        val owner = repo.substringBefore('/', "")
-        val name = repo.substringAfter('/', "")
-        if (owner.isEmpty() || name.isEmpty()) return RefreshOutcome.SUCCESS
+        if (summary == null || summary.state == TokenState.INVALID) return false
+        if (repo.substringBefore('/', "").isEmpty() || repo.substringAfter('/', "").isEmpty()) return false
+        val limited = snapshots.get(repo)?.rateLimitedUntil
+        return limited == null || limited <= clock.now()
+    }
 
+    /**
+     * Called before enqueueing a manual refresh: if it can run, shows the `[...]` indicator at once by
+     * setting `refreshing` and returns true. Returns false when the refresh would be skipped anyway.
+     */
+    suspend fun prepare(repo: String): Boolean {
+        if (!canRefresh(repo)) return false
+        snapshots.update(repo) { it.copy(refreshing = true) }
+        onChanged()
+        return true
+    }
+
+    suspend fun refresh(repo: String): RefreshOutcome {
+        if (!canRefresh(repo)) return RefreshOutcome.SUCCESS
+        val owner = repo.substringBefore('/')
+        val name = repo.substringAfter('/')
         val before = snapshots.get(repo)
         val start = clock.now()
-        before?.rateLimitedUntil?.let { if (it > start) return RefreshOutcome.SUCCESS }
 
         snapshots.update(repo) { it.copy(refreshing = true) }
         onChanged()
