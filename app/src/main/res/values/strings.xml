@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Not translated on purpose: the debug build overrides it with "ciDGET debug". -->
+    <string name="app_name" translatable="false">ciDGET</string>
+    <string name="settings_title">Settings</string>
+    <string name="settings_placeholder">Settings will appear here.</string>
+    <string name="widget_description">CI status of the branches of one repository</string>
+</resources>
