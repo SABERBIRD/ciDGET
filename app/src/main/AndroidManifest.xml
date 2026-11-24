@@ -15,7 +15,7 @@
             android:name=".widget.config.WidgetConfigActivity"
             android:excludeFromRecents="true"
             android:exported="true"
-            android:theme="@android:style/Theme.Material.Dialog">
+            android:theme="@style/Theme.Cidget.Config">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_CONFIGURE" />
             </intent-filter>

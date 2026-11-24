@@ -45,6 +45,12 @@ public data class DisplaySettings(
     public fun withColumnPriority(id: ColumnId, priority: Int): DisplaySettings =
         copy(columns = columns.map { if (it.id == id) it.copy(priority = priority) else it })
 
+    /** Copy with the width cap of column [id] set to [maxChars] (clamped to 1–80), or cleared with null. */
+    public fun withColumnMaxChars(id: ColumnId, maxChars: Int?): DisplaySettings {
+        val v = maxChars?.coerceIn(ColumnConfig.MIN_CHARS, ColumnConfig.MAX_CHARS)
+        return copy(columns = columns.map { if (it.id == id) it.copy(maxChars = v) else it })
+    }
+
     /** Copy with column [id] moved one place up ([delta] = -1) or down (+1). No-op at the ends. */
     public fun withColumnMoved(id: ColumnId, delta: Int): DisplaySettings {
         val i = columns.indexOfFirst { it.id == id }
@@ -70,6 +76,7 @@ public data class DisplaySettings(
         if (cols.none { it.enabled && (it.id == ColumnId.STATUS || it.id == ColumnId.BRANCH) }) {
             cols = cols.map { if (it.id == ColumnId.BRANCH) it.copy(enabled = true) else it }
         }
+        cols = cols.map { c -> c.maxChars?.let { c.copy(maxChars = it.coerceIn(ColumnConfig.MIN_CHARS, ColumnConfig.MAX_CHARS)) } ?: c }
         return copy(columns = cols, fontSizeSp = fontSizeSp.coerceIn(MIN_FONT_SP, MAX_FONT_SP))
     }
 

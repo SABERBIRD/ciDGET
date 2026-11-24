@@ -1,5 +1,10 @@
 package io.github.saberbird.cidget.widget.config
 
+import android.content.ActivityNotFoundException
+import android.content.Context
+import android.content.Intent
+import android.net.Uri
+import android.provider.Settings
 import androidx.annotation.StringRes
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -9,8 +14,10 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -21,8 +28,9 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import io.github.saberbird.cidget.R
 import io.github.saberbird.cidget.core.ColumnConfig
@@ -32,6 +40,7 @@ import io.github.saberbird.cidget.core.GlyphStyle
 import io.github.saberbird.cidget.core.TinySource
 import io.github.saberbird.cidget.core.WidgetConfig
 import io.github.saberbird.cidget.di.AppGraph
+import io.github.saberbird.cidget.settings.TokenSection
 import io.github.saberbird.cidget.widget.Palette
 import kotlinx.coroutines.launch
 
@@ -69,10 +78,10 @@ internal fun MainScreen(
     appWidgetId: Int,
     config: WidgetConfig,
     global: DisplaySettings,
-    tokenCount: Int,
     go: (Screen) -> Unit,
 ) {
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
     var otherWidgets by remember { mutableStateOf(0) }
     LaunchedEffect(Unit) { otherWidgets = graph.settings.allWidgets().count { it.key != appWidgetId && it.value.repo != null } }
     Column(
@@ -82,8 +91,8 @@ internal fun MainScreen(
         TermTitle(stringResource(R.string.cfg_title))
         Text(stringResource(R.string.cfg_repo, config.repo ?: stringResource(R.string.cfg_none)))
         TermButton(stringResource(R.string.cfg_change_repo)) { go(Screen.Repo) }
-        Text(if (tokenCount == 0) stringResource(R.string.token_none) else pluralStringResource(R.plurals.token_count, tokenCount, tokenCount))
-        TermButton(stringResource(R.string.token_title)) { go(Screen.Token) }
+        TermRule()
+        TokenSection(graph, showContentsHint = false)
         TermRule()
         TermToggle(stringResource(R.string.cfg_use_defaults), config.useGlobalDefaults) { on ->
             scope.launch {
@@ -102,6 +111,19 @@ internal fun MainScreen(
         TermTitle(stringResource(R.string.cfg_global))
         TermButton(stringResource(R.string.cfg_columns)) { go(Screen.Columns(Target.GLOBAL)) }
         TermButton(stringResource(R.string.cfg_display)) { go(Screen.Display(Target.GLOBAL)) }
+        TermRule()
+        Text(stringResource(R.string.cfg_remove_hint), color = Palette.dim)
+        TermButton(stringResource(R.string.cfg_uninstall)) { uninstall(context) }
+    }
+}
+
+/** Opens the system's uninstall dialog for this app; falls back to the app's settings page. */
+private fun uninstall(context: Context) {
+    val uri = Uri.parse("package:${context.packageName}")
+    try {
+        context.startActivity(Intent(Intent.ACTION_DELETE, uri).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+    } catch (_: ActivityNotFoundException) {
+        context.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, uri).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
     }
 }
 
@@ -130,6 +152,7 @@ internal fun ColumnsScreen(graph: AppGraph, appWidgetId: Int, config: WidgetConf
                 TermButton("▲", enabled = index > 0) { edit(display.withColumnMoved(col.id, -1)) }
                 TermButton("▼", enabled = index < display.columns.size - 1) { edit(display.withColumnMoved(col.id, 1)) }
             }
+            MaxCharsField(col) { edit(display.withColumnMaxChars(col.id, it)) }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 PriorityChoice(R.string.prio_high, col, ColumnConfig.HIGH) { edit(display.withColumnPriority(col.id, ColumnConfig.HIGH)) }
                 PriorityChoice(R.string.prio_medium, col, ColumnConfig.MEDIUM) { edit(display.withColumnPriority(col.id, ColumnConfig.MEDIUM)) }
@@ -138,6 +161,24 @@ internal fun ColumnsScreen(graph: AppGraph, appWidgetId: Int, config: WidgetConf
         }
         BackButton(back)
     }
+}
+
+/** Optional width cap in characters for one column; empty means the column's default (D26). */
+@Composable
+private fun MaxCharsField(col: ColumnConfig, onChange: (Int?) -> Unit) {
+    var text by remember(col.id, col.maxChars) { mutableStateOf(col.maxChars?.toString().orEmpty()) }
+    OutlinedTextField(
+        value = text,
+        onValueChange = { v ->
+            val digits = v.filter { it.isDigit() }.take(2)
+            text = digits
+            onChange(digits.toIntOrNull())
+        },
+        label = { Text(stringResource(R.string.col_max)) },
+        singleLine = true,
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+        modifier = Modifier.fillMaxWidth(),
+    )
 }
 
 /** A column's stored priority counts as the nearest of high / medium / low. */

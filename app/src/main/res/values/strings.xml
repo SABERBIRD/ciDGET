@@ -89,11 +89,10 @@
     <string name="token_item">%1$s …%2$s</string>
     <string name="w_ls_prompt">~ $ ls repos</string>
     <string name="w_no_repos">no repos</string>
-    <plurals name="token_count">
-        <item quantity="one">%d token saved</item>
-        <item quantity="other">%d tokens saved</item>
-    </plurals>
     <string name="token_paste">paste token from clipboard</string>
     <string name="token_replace_paste">replace from clipboard</string>
     <string name="token_paste_hint">Copy the token on GitHub, then tap the button. The clipboard is cleared after saving.</string>
+    <string name="cfg_uninstall">uninstall ciDGET</string>
+    <string name="cfg_remove_hint">Remove only this widget: long-press it on the home screen → Remove. The button below uninstalls the whole app.</string>
+    <string name="col_max">max width, chars (empty = auto)</string>
 </resources>

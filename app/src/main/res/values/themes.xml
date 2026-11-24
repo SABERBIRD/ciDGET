@@ -1,6 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <style name="Theme.Cidget" parent="android:Theme.Material.NoActionBar" />
+    <!-- Full-screen terminal look for the settings (D26). -->
+    <style name="Theme.Cidget.Config" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">#101214</item>
+        <item name="android:statusBarColor">#101214</item>
+        <item name="android:navigationBarColor">#101214</item>
+        <item name="android:windowLightStatusBar">false</item>
+    </style>
     <!-- Invisible trampoline for COPY/SHARE: no window, no animation. -->
     <style name="Theme.Cidget.Transparent" parent="android:Theme.Translucent.NoTitleBar">
         <item name="android:windowAnimationStyle">@null</item>

@@ -51,6 +51,14 @@ private fun clipboardText(context: Context): String? =
  */
 @Composable
 fun TokenScreen(graph: AppGraph, showContentsHint: Boolean, modifier: Modifier = Modifier) {
+    Column(modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(16.dp)) {
+        TokenSection(graph, showContentsHint)
+    }
+}
+
+/** The token list and the paste button without its own scrolling, so other screens can embed it. */
+@Composable
+fun TokenSection(graph: AppGraph, showContentsHint: Boolean) {
     val controller = remember { TokenController(graph) }
     val tokens by graph.tokenStore.summaries.collectAsState()
     val scope = rememberCoroutineScope()
@@ -80,10 +88,7 @@ fun TokenScreen(graph: AppGraph, showContentsHint: Boolean, modifier: Modifier =
         }
     }
 
-    Column(
-        modifier = modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(4.dp),
-    ) {
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         TermTitle(stringResource(R.string.token_title))
         if (tokens.isEmpty()) Text(stringResource(R.string.token_none))
         tokens.forEach { t ->

@@ -45,6 +45,11 @@ object RefreshScheduler {
         WorkManager.getInstance(context).enqueueUniqueWork("refresh:$repo", ExistingWorkPolicy.KEEP, request)
     }
 
+    /** Cancels the queued or running refresh of [repo] (it is no longer shown by any widget). */
+    fun cancel(context: Context, repo: String) {
+        WorkManager.getInstance(context).cancelUniqueWork("refresh:$repo")
+    }
+
     /** Expedited unique work `repolist` (KEEP): loads the repos the tokens can see. */
     fun refreshRepoList(context: Context) {
         val request = OneTimeWorkRequestBuilder<RepoListWorker>()

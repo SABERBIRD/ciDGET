@@ -112,4 +112,24 @@ class ColumnFittingTest {
         assertEquals(3, f.single { it.id == ColumnId.AGE }.width)
         assertEquals(7, f.single { it.id == ColumnId.SHA }.width)
     }
+
+    @Test fun l11_userMaxCharsCapsALongBranchSoOtherColumnsStay() {
+        val long = row(
+            ColumnId.STATUS to "✗", ColumnId.BRANCH to "feature/a-really-long-branch-name-here", ColumnId.AGE to "5m",
+            ColumnId.RUN_NUMBER to "#412", ColumnId.COPY to "[⧉]", ColumnId.SHARE to "[↗]",
+        )
+        val capped = cfg(*six).map { if (it.id == ColumnId.BRANCH) it.copy(maxChars = 12) else it }
+        val f = fitColumns(capped, listOf(long), 40)
+        assertEquals(12, f.single { it.id == ColumnId.BRANCH }.width)
+        assertEquals(six.toList(), ids(f))
+    }
+
+    @Test fun l12_maxCharsOverridesTheDefaultCapAndIsClamped() {
+        val s = DisplaySettings().withColumnMaxChars(ColumnId.BRANCH, 500)
+        assertEquals(ColumnConfig.MAX_CHARS, s.columns.single { it.id == ColumnId.BRANCH }.maxChars)
+        assertEquals(null, s.withColumnMaxChars(ColumnId.BRANCH, null).columns.single { it.id == ColumnId.BRANCH }.maxChars)
+        val wide = row(ColumnId.STATUS to "✗", ColumnId.BRANCH to "x".repeat(50))
+        val f = fitColumns(cfg(ColumnId.STATUS, ColumnId.BRANCH).map { if (it.id == ColumnId.BRANCH) it.copy(maxChars = 50) else it }, listOf(wide), 80)
+        assertEquals(50, f.single { it.id == ColumnId.BRANCH }.width)
+    }
 }

@@ -100,7 +100,7 @@ charsPerLine = floor((widgetWidthDp - horizontalPaddingDp) / (fontSizeSp * fontS
 
 Fitting input: enabled columns in user order with priority, the rows to render, and `charsPerLine`. Separator = 1 space.
 
-1. For every column compute `content` = the longest rendered value over the rows (capped at `max`). Drop columns whose `content == 0` for all rows.
+1. For every column compute `content` = the longest rendered value over the rows (capped at the user's `maxChars` for that column if set (1–80, D26), otherwise at `max`). Drop columns whose `content == 0` for all rows.
 2. A fixed column needs `content` chars. A flexible column needs `min(min, content)`.
 3. While `sum(needs) + separators > charsPerLine`: remove the column with the lowest priority (tie: the one later in the order). `STATUS` is removed only if it is the last column left. `BRANCH` is removed only when `STATUS + sep + 3 > charsPerLine`.
 4. Spare = `charsPerLine - used`. Give it to flexible columns in descending priority, each up to its `content`.

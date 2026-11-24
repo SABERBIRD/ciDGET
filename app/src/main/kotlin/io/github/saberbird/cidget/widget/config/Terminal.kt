@@ -2,8 +2,11 @@ package io.github.saberbird.cidget.widget.config
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -42,7 +45,7 @@ internal fun TerminalTheme(content: @Composable () -> Unit) {
         labelLarge = base.labelLarge.mono(), labelMedium = base.labelMedium.mono(), labelSmall = base.labelSmall.mono(),
     )
     MaterialTheme(colorScheme = terminalColors, typography = mono) {
-        Surface(color = Palette.bg, modifier = Modifier.background(Palette.bg)) { content() }
+        Surface(color = Palette.bg, modifier = Modifier.background(Palette.bg).windowInsetsPadding(WindowInsets.safeDrawing)) { content() }
     }
 }
 

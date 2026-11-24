@@ -71,7 +71,7 @@ private fun ConfigRoot(graph: AppGraph, appWidgetId: Int, onFinish: () -> Unit) 
     BackHandler(enabled = screen != Screen.Main) { screen = Screen.Main }
 
     when (val s = screen) {
-        Screen.Main -> MainScreen(graph, appWidgetId, config, global, tokens.size) { screen = it }
+        Screen.Main -> MainScreen(graph, appWidgetId, config, global) { screen = it }
         Screen.Token -> Column {
             TokenScreen(graph, showContentsHint = false)
             BackButton { screen = Screen.Main }

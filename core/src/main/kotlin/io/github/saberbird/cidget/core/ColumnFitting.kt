@@ -33,7 +33,7 @@ public fun fitColumns(columns: List<ColumnConfig>, rows: List<Map<ColumnId, Stri
     val cols = columns.withIndex().filter { it.value.enabled }.map { (i, cfg) ->
         val spec = Columns.spec(cfg.id)
         val longest = rows.maxOfOrNull { displayWidth(it[cfg.id].orEmpty()) } ?: 0
-        Col(cfg, spec, i, spec.max?.let { minOf(longest, it) } ?: longest)
+        Col(cfg, spec, i, (cfg.maxChars ?: spec.max)?.let { minOf(longest, it) } ?: longest)
     }.filter { it.content > 0 }.toMutableList()
     if (cols.isEmpty()) return emptyList()
 

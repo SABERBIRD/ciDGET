@@ -18,3 +18,8 @@ Download the new APK from Releases and install it over the old one. Settings are
 ## Test builds
 
 Every push builds a debug APK: *Actions* tab → latest **build** run → *Artifacts* → `cidget-debug-…` (you need to be signed in to GitHub). Debug builds install next to the release build as "ciDGET debug".
+
+## Removing
+
+- **Only a widget:** long-press it on the home screen → **Remove**.
+- **The whole app:** there is no launcher icon, so use widget settings (long-press → **Reconfigure**, or `[⚙]` in the header) → **[ uninstall ciDGET ]**, or Android Settings → Apps → ciDGET → Uninstall. Uninstalling also deletes the saved tokens.

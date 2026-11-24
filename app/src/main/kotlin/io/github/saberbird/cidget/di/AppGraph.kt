@@ -19,7 +19,10 @@ import io.github.saberbird.cidget.work.RefreshScheduler
 import io.github.saberbird.cidget.data.TokenStore
 import io.github.saberbird.cidget.github.GitHubClient
 import io.github.saberbird.cidget.github.createHttpClient
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import java.io.File
@@ -44,6 +47,9 @@ class AppGraph(val app: Application) {
      */
     fun githubFor(tokenId: String?): GitHubClient =
         GitHubClient(http.withTokenProvider { tokenStore.usableToken(tokenId) }, log = log)
+
+    /** For work that must outlive a widget callback or a screen. */
+    val background: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     val snapshots: SnapshotStore = SnapshotStore(File(app.filesDir, "snapshots"))
 
@@ -72,9 +78,11 @@ class AppGraph(val app: Application) {
     )
 
     /** Shows "loading" in the widget's repo list at once, then queues the worker that refreshes it. */
-    suspend fun requestRepoList() {
-        repoLists.prepare()
-        RefreshScheduler.refreshRepoList(app)
+    fun requestRepoList() {
+        background.launch {
+            repoLists.prepare()
+            RefreshScheduler.refreshRepoList(app)
+        }
     }
 
     /**
@@ -82,11 +90,17 @@ class AppGraph(val app: Application) {
      * queues a refresh of the repo.
      */
     suspend fun pickRepo(appWidgetId: Int, repo: String, tokenId: String?) {
+        val before = settings.getWidgetRepo(appWidgetId)
+        // One atomic write; the widget observes it and redraws, so the switch is instant (D26).
         settings.setWidgetRepo(appWidgetId, repo, tokenId)
         settings.setRepoListOpen(appWidgetId, false)
-        snapshots.deleteExcept(settings.reposInUse())
-        updateWidgets()
-        requestRefresh(repo)
+        // Everything slower runs in the background, so the next tap is never waiting for this repo.
+        background.launch {
+            val inUse = settings.reposInUse()
+            if (before != null && before != repo && before !in inUse) RefreshScheduler.cancel(app, before)
+            snapshots.deleteExcept(inUse)
+            requestRefresh(repo)
+        }
     }
 
     /** Manual refresh: shows `[...]` immediately, then queues the work. */

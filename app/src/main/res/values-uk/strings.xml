@@ -87,13 +87,10 @@
     <string name="token_item">%1$s …%2$s</string>
     <string name="w_ls_prompt">~ $ ls repos</string>
     <string name="w_no_repos">немає репозиторіїв</string>
-    <plurals name="token_count">
-        <item quantity="one">%d токен збережено</item>
-        <item quantity="few">%d токени збережено</item>
-        <item quantity="many">%d токенів збережено</item>
-        <item quantity="other">%d токена збережено</item>
-    </plurals>
     <string name="token_paste">вставити токен з буфера</string>
     <string name="token_replace_paste">замінити з буфера</string>
     <string name="token_paste_hint">Скопіюйте токен на GitHub і натисніть кнопку. Після збереження буфер очищується.</string>
+    <string name="cfg_uninstall">видалити ciDGET</string>
+    <string name="cfg_remove_hint">Прибрати лише цей віджет: утримуйте його на екрані → Видалити. Кнопка нижче видаляє весь застосунок.</string>
+    <string name="col_max">макс. ширина, символів (порожньо = авто)</string>
 </resources>

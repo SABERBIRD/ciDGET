@@ -102,6 +102,17 @@ class TokenStoreTest {
         assertEquals(1, store.summaries.value.size)
     }
 
+    @Test fun summariesComeFromAPlainCacheWithoutTouchingTheKeystore() {
+        TokenStore(file, keys).add(fake, "me", null)
+        val cold = TokenStore(file, object : TokenKeyProvider {
+            override fun getOrCreate(): SecretKey = error("keystore touched")
+            override fun delete() {}
+        })
+        assertEquals("abcd", cold.summaries.value.single().last4)
+        assertEquals("me", cold.summaries.value.single().label)
+        assertFalse(File(dir, "token.bin.meta").readText().contains("github_pat"))
+    }
+
     @Test fun corruptFileIsWipedAndTreatedAsNoToken() {
         val store = TokenStore(file, keys)
         store.add(fake, "", null)

@@ -31,6 +31,13 @@ private data class TokenPayload(val tokens: List<SavedToken> = emptyList())
 @Serializable
 private data class LegacyPayload(val token: String, val state: TokenState, val expiresAt: Instant? = null)
 
+/** Non-secret part of a token kept in a plain file so the first widget draw needs no Keystore (D26). */
+@Serializable
+private data class SummaryCache(val items: List<TokenSummaryDto> = emptyList())
+
+@Serializable
+private data class TokenSummaryDto(val id: String, val label: String, val last4: String, val expiresAt: Instant?, val state: TokenState)
+
 /** What the UI may know about a token: never the token itself, only its last 4 characters. */
 data class TokenSummary(val id: String, val label: String, val last4: String, val expiresAt: Instant?, val state: TokenState)
 
@@ -50,8 +57,13 @@ class TokenStore(
     /** Summaries of all saved tokens, in the order they were added. */
     val summaries: StateFlow<List<TokenSummary>> = _summaries
 
+    private val metaFile = File(file.parentFile, file.name + ".meta")
+
     init {
-        publish(read())
+        // Fast path: the non-secret summaries come from a plain file, so a cold start (a widget being added)
+        // does not wait for the Keystore. The encrypted file is only opened when a token is really needed.
+        val cached = readMeta()
+        if (cached != null && cached.isNotEmpty() && file.exists()) _summaries.value = cached else publish(read())
     }
 
     /** True when at least one token is saved, whatever its state. */
@@ -156,13 +168,28 @@ class TokenStore(
         }
     }
 
+    private fun readMeta(): List<TokenSummary>? = runCatching {
+        json.decodeFromString(SummaryCache.serializer(), metaFile.readText()).items
+            .map { TokenSummary(it.id, it.label, it.last4, it.expiresAt, it.state) }
+    }.getOrNull()
+
+    private fun writeMeta(list: List<TokenSummary>) {
+        runCatching {
+            val cache = SummaryCache(list.map { TokenSummaryDto(it.id, it.label, it.last4, it.expiresAt, it.state) })
+            metaFile.writeText(json.encodeToString(SummaryCache.serializer(), cache))
+        }
+    }
+
     private fun wipe() {
+        metaFile.delete()
         file.delete()
         File(file.parentFile, file.name + ".tmp").delete()
         keys.delete()
     }
 
     private fun publish(payload: TokenPayload) {
-        _summaries.value = payload.tokens.map { TokenSummary(it.id, it.label, it.token.takeLast(4), it.expiresAt, it.state) }
+        val list = payload.tokens.map { TokenSummary(it.id, it.label, it.token.takeLast(4), it.expiresAt, it.state) }
+        _summaries.value = list
+        writeMeta(list)
     }
 }

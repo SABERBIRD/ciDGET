@@ -6,6 +6,7 @@ import android.content.Context
 import androidx.glance.appwidget.GlanceAppWidget
 import androidx.glance.appwidget.GlanceAppWidgetReceiver
 import io.github.saberbird.cidget.graph
+import io.github.saberbird.cidget.work.RefreshScheduler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -18,6 +19,8 @@ class CidgetWidgetReceiver : GlanceAppWidgetReceiver() {
         super.onUpdate(context, appWidgetManager, appWidgetIds)
         background {
             val graph = context.graph
+            // A new widget has no repo yet: have the repo list ready for the first tap on the header.
+            if (graph.tokenStore.hasToken()) RefreshScheduler.refreshRepoList(context)
             appWidgetIds.forEach { id ->
                 val repo = graph.settings.getWidgetRepo(id) ?: return@forEach
                 if (graph.snapshots.get(repo) == null) graph.requestRefresh(repo)

@@ -47,10 +47,18 @@ public object Columns {
     public fun spec(id: ColumnId): ColumnSpec = byId.getValue(id)
 }
 
-/** One user-configured column: whether it is shown and how important it is. The list order is the display order. */
+/**
+ * One user-configured column: whether it is shown, how important it is and an optional width cap. The list
+ * order is the display order. [maxChars] (null = the column's default cap) limits the column to that many
+ * characters, so one long branch name cannot push the other columns out.
+ */
 @Serializable
-public data class ColumnConfig(val id: ColumnId, val enabled: Boolean, val priority: Int) {
+public data class ColumnConfig(val id: ColumnId, val enabled: Boolean, val priority: Int, val maxChars: Int? = null) {
     public companion object {
+        /** Allowed range of a user-set [maxChars]. */
+        public const val MIN_CHARS: Int = 1
+        public const val MAX_CHARS: Int = 80
+
         /** Priority values stored for the UI's high / medium / low. */
         public const val HIGH: Int = 80
         public const val MEDIUM: Int = 50
