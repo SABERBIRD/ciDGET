@@ -13,6 +13,11 @@ public data class AggregationInput(
     /** `createdAt` of the oldest fetched run, or null when all runs were fetched. */
     val runsCoverageStart: Instant?,
     val now: Instant,
+    /**
+     * Head commits that a targeted `?head_sha=` request already covered. A branch whose head is in this
+     * set and still has no runs is [GreyReason.NO_RUNS], not an unknown-coverage gap.
+     */
+    val resolvedShas: Set<String> = emptySet(),
 )
 
 /**

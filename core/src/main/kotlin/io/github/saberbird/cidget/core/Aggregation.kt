@@ -34,7 +34,7 @@ public fun aggregate(input: AggregationInput): AggregationResult {
         val commitRuns = if (sha == null) emptyList() else branchRuns.filter { it.headSha == sha }
         when {
             commitRuns.isNotEmpty() -> statusFromRuns(name, sha, approximate, commitRuns, lastActivity)
-            exactSha != null && input.runsCoverageStart != null -> {
+            exactSha != null && input.runsCoverageStart != null && exactSha !in input.resolvedShas -> {
                 gaps += name
                 BranchStatus(name, Status.GREY, GreyReason.NOT_LOADED, sha, false, null, 0, lastActivity)
             }

@@ -34,6 +34,7 @@ data class AggregationInput(
     val headsComplete: Boolean,          // false = branch list was capped (GITHUB_API.md §3.1)
     val runsCoverageStart: Instant?,     // createdAt of the oldest fetched run; null if all runs were fetched
     val now: Instant,
+    val resolvedShas: Set<String> = emptySet(), // head SHAs already covered by a targeted ?head_sha= request
 )
 ```
 
@@ -62,7 +63,7 @@ Every run maps to exactly one `RunState`:
    - **Accurate mode** (`heads != null`): `headSha = heads[branch].sha`. Branches present in `heads` but without runs exist (they are shown as `○` NO_RUNS, D21). Runs whose branch is not in `heads` are dropped if `headsComplete` (the branch was deleted). If not `headsComplete`, such a branch uses fallback mode for itself (`headApproximate = true`).
    - **Fallback mode** (`heads == null`): `headSha` = `headSha` of the run with the greatest `createdAt` (tie → greater `id`). The resulting `BranchStatus.headApproximate = true`.
 4. **Runs of the commit:** runs of this branch with `run.headSha == headSha`. Runs of the same SHA on *other* branches are **not** borrowed.
-5. **Coverage check** (accurate mode only): if the branch has no runs for `headSha` among the fetched runs, but `runsCoverageStart != null` (pagination stopped early), the result is `UNKNOWN_COVERAGE`. The data layer resolves it with a targeted `?head_sha=` request (see GITHUB_API.md §3.3) and runs aggregation again. If that is not possible, the branch is grey with reason `NOT_LOADED`.
+5. **Coverage check** (accurate mode only): if the branch has no runs for `headSha` among the fetched runs, but `runsCoverageStart != null` (pagination stopped early), the result is `UNKNOWN_COVERAGE`. The data layer resolves it with a targeted `?head_sha=` request (see GITHUB_API.md §3.3) and runs aggregation again. If that is not possible, the branch is grey with reason `NOT_LOADED`. A head SHA listed in `resolvedShas` (the targeted request succeeded) is never a gap: no runs there means `NO_RUNS`. `aggregate()` returns `AggregationResult(branches, unknownCoverage)`.
 
 ## 4. Workflow de-duplication and branch colour
 

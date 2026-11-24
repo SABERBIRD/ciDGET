@@ -10,7 +10,7 @@ All network code lives in the `:github` module (pure JVM, OkHttp + kotlinx.seria
 | `Accept` | `application/vnd.github+json` |
 | `X-GitHub-Api-Version` | `2022-11-28` (a constant; bump only after checking the changelog) |
 | `User-Agent` | `ciDGET/<versionName>` (GitHub rejects requests without one) |
-| `Cache-Control` | `no-cache` (forces OkHttp to revalidate with `If-None-Match` instead of serving its 60 s cached copy) |
+| `Cache-Control` | `max-age=0` (forces OkHttp to revalidate with `If-None-Match` instead of serving its 60 s cached copy). `no-cache` does not work: OkHttp then skips the conditional request entirely (found in T3 tests). |
 
 - Base URL `https://api.github.com` (D15: no Enterprise).
 - OkHttp `Cache` in `cacheDir/http`, 10 MB. GitHub sends `ETag` and `Cache-Control: private, max-age=60`, so OkHttp stores responses and sends `If-None-Match` itself. A `304` is returned to the caller as the cached `200`; detect it with `response.networkResponse?.code == 304`. Conditional requests answered with `304` do not count against the rate limit. Verify this with V5 in RESEARCH.md.
@@ -91,6 +91,8 @@ Each request returns `ApiResult<T>` = `Ok(value, meta)` or `Err(error, meta)`. N
 | `404` | `NotFound` | `! 404 repo/no access` | GitHub answers 404 for private repos the token cannot see |
 | `5xx` | `Server(code)` | `! github 5xx` | keep cache; retry with backoff |
 | other `4xx` | `Http(code)` | `! http 422` | keep cache; no retry |
+| No token stored | `NoToken` | `! no token` | nothing is sent |
+| Unexpected exception caught at the boundary | `Unexpected` | `! error` | keep cache; no retry |
 | JSON parse failure | `Parse` | `! bad response` | keep cache; log the endpoint (never the body) in debug builds |
 
 Errors never delete the cached snapshot. The snapshot carries the last error and when it happened (see ARCHITECTURE.md §4).
@@ -100,7 +102,7 @@ Errors never delete the cached snapshot. The snapshot carries the last error and
 - Parsing: a run list fixture recorded from `testING` (token scrubbed). It must contain unknown fields, null `conclusion`, null `head_branch` and a fork run.
 - Pagination: `Link` header followed, and the stop conditions of §3.2 (each one separately).
 - ETag: the second identical request carries `If-None-Match`, a `304` yields the cached body, and `networkResponse.code == 304`.
-- `Cache-Control: no-cache` request header is present.
+- `Cache-Control: max-age=0` request header is present.
 - Each row of the §5 table, including the 403-with-remaining-0 vs plain-403 distinction and `retry-after` parsing.
 - Token expiry header: both formats, missing header.
 - The `Authorization` header is never present in anything the module logs.
