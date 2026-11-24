@@ -10,6 +10,7 @@ ciDGET is not on Google Play. You install the APK file from GitHub. Android 12 o
 3. Open the downloaded file. If Android asks, allow **Install unknown apps** for your browser (or file manager), then tap **Install**.
 4. Long-press the home screen → **Widgets** → **ciDGET** → drag it to the screen. There is no app icon (D22): the widget opens its settings (or the repo list) right away when you add it.
 5. Copy your token and tap the paste button ([how to create it](TOKEN.md); you can add several), then choose a repository. Later: long-press the widget → **Widget settings**, or tap the repo name → `[⚙]`. The language (English or Ukrainian) is a button in the settings.
+6. Optional, in the settings: `[Background refresh]` (how often, Wi-Fi only, expiry warning; for all widgets), `[Sort & filter]`, `[Look]` (font, dark/light/system theme, symbols). Deleting a token asks `[Yes] [No]` first.
 
 ## Updating
 

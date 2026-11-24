@@ -60,6 +60,9 @@ Order: tasks within a stage can run in parallel where *Depends on* allows.
 - **Done when:** V8 and V9 checked and their results written into RESEARCH.md; resizing from 1×1 to 5×5 never wraps a row; TINY tap opens the right run.
 
 ### T10. Per-widget settings, global defaults, configuration activity
+
+> **Superseded by D28.** Done in the in-widget form: each widget owns its settings, there are no global defaults, no "copy from widget" and no drag-and-drop (order and priority use `[↑ Up] [↓ Down]`, so `sh.calvin.reorderable` is not used). The text below is kept for history.
+
 - **Depends on:** T9
 - **Do:** full `WidgetConfig` + global defaults in DataStore; extend the configuration activity (`reconfigurable|configuration_optional`; since D22 it already hosts token and repo, and is the only settings UI, with no launcher icon) with repo, "copy settings from widget…", "use global defaults"; settings screens for columns (enable, drag order via `sh.calvin.reorderable`, priority high/medium/low) and display (glyph style, font size, TINY source). Enforce "STATUS or BRANCH must stay enabled". Delete config in `onDeleted`.
 - **Done when:** two widgets with different repos and columns work independently; copying settings works; the defaults change all widgets that inherit them and none that don't; settings survive an app restart.
@@ -69,26 +72,41 @@ Order: tasks within a stage can run in parallel where *Depends on* allows.
 ## Stage 4: Finish
 
 ### T11. Background refresh
+
+> **Done** (2026-11-24): `RefreshAllWorker`, settings screen "Background refresh" (app-wide, D29). Without the `work-testing` dependency (not in ARCHITECTURE §5) the scheduling rules are tested as the pure `periodicSpec`; the 401 stop is covered by `RefreshRepositoryTest`.
+
 - **Depends on:** T5
 - **Do:** periodic work per ARCHITECTURE.md §3, settings for interval/off/unmetered/battery-not-low, refresh only repos in use, rate-limit and 401 skips.
 - **Done when:** with WorkManager test helpers, the periodic work is enqueued, re-enqueued with a new interval, and cancelled when off; a 401 stops further API calls (fake client counts calls).
 
 ### T12. Error, stale and token-expiry display
+
+> **Done** (2026-11-24): `stale 2h`, `! token expires in 3d` (warning days are app-wide), last error and expiry warnings in the settings screen; `isStale`/`expiryWarningDays` tested in `:core`.
+
 - **Depends on:** T6, T11
 - **Do:** all meta-line states from WIDGET.md §2, stale marker, token expiry warning (D13 days, configurable), errors in the settings screen too, TINY `!` marker.
 - **Done when:** each row of the GITHUB_API.md §5 table produces the documented text (unit test on the formatter + manual check of offline/401/404).
 
 ### T13. Filters and sorting settings
+
+> **Done** (2026-11-24) as the "Sort & filter" screen. Pinned branches are chosen from the known branches only: the widget has no text input (D25).
+
 - **Depends on:** T10
 - **Do:** UI for sort key, pinned branches (choose from known branches or type), hide idle after N days, max rows, hide branches without runs (default off). Wire to the `:core` functions from T2.
 - **Done when:** manual check with `testING` for each option; pinned branches stay first under every sort.
 
 ### T14. Themes
+
+> **Done** (2026-11-24): per-widget dark/light/system (D29); system uses Glance day/night colour providers. Light grey raised to `#656D76` for contrast. Screenshots are the owner's manual check.
+
 - **Depends on:** T9
 - **Do:** light palette, DARK/LIGHT/SYSTEM setting (global and per widget), bracket glyph style.
 - **Done when:** screenshots of the three themes and both glyph styles in the PR; contrast ≥ 4.5:1 for all text roles (state the measured ratios in the PR).
 
 ### T15. Localization pass
+
+> **Done** (2026-11-24): every string in both languages, `MissingTranslation` is a lint error. Compact widget texts (`5m`, `3d`) are not pluralised on purpose.
+
 - **Depends on:** all UI tasks
 - **Do:** every user-visible string in `values/strings.xml` and `values-uk/strings.xml`; plurals where needed (`5 хв тому` etc.). Widget column texts (`5m`, `#412`) stay in their compact terminal form in both languages.
 - **Done when:** lint `MissingTranslation` is an error and passes; a Ukrainian screenshot of settings and widget is in the PR.

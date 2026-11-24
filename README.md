@@ -12,13 +12,15 @@ updated 2m ago
 ```
 
 - Tap a row to open the run, `[⧉]` copies the run link, `[↗]` shares it.
-- Resizes from 1×1 (one big status symbol) to full screen.
+- Resizes from 1×1 (a tile in the status colour) through a one-cell column to full screen.
+- Settings live inside the widget, in the same terminal look: tokens, columns, sort and filters, dark/light/system theme, English or Ukrainian.
+- Refreshes in the background (every 15 min to 6 h, or off; Wi-Fi only and battery options), marks stale data and warns before a token expires.
 - No server, no OAuth app: a read-only fine-grained Personal Access Token is stored encrypted on the device.
 - Not on Google Play: APKs are built by GitHub Actions and installed manually.
 
 > ## ⚠️ THE APP IS SIGNED WITH A PUBLIC KEY. THE KEY IS COMMITTED TO THIS REPOSITORY, SO ANYONE CAN SIGN AN APK WITH IT. A VALID SIGNATURE IS **NOT** PROOF THAT AN APK COMES FROM THIS PROJECT. INSTALL ONLY FROM <https://github.com/SABERBIRD/ciDGET/releases>, NEVER FROM A CHAT, A FILE-SHARING SITE OR ANY OTHER SOURCE. A FAKE APK SIGNED WITH THIS KEY CAN REPLACE THE APP AND READ YOUR TOKENS.
 
-**Status: MVP in progress** (branch `dev`). The design is in [`docs/`](docs/) and the implementation tasks are in [`docs/TASKS.md`](docs/TASKS.md).
+**Status: feature-complete, in testing** (branch `dev`). The design is in [`docs/`](docs/) and the implementation tasks are in [`docs/TASKS.md`](docs/TASKS.md).
 
 ## Documentation
 

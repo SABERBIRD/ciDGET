@@ -17,9 +17,10 @@ The widget is built with Jetpack Glance (`GlanceAppWidget`). Platform limits beh
 | `red` | `#FF6B6B` | `#CF222E` |
 | `yellow` | `#E3B341` | `#9A6700` |
 | `green` | `#3FB950` | `#1A7F37` |
-| `grey` | `#6E7681` | `#6E7781` |
+| `grey` | `#8B929A` | `#656D76` |
+| `link` | `#79C0FF` | `#0550AE` |
 
-- Theme setting (D12): `DARK` (default), `LIGHT`, `SYSTEM`. `SYSTEM` uses Glance `ColorProvider(day, night)`; the others pick one palette.
+- Theme setting (D12, per widget, "Look" screen): `DARK` (default), `LIGHT`, `SYSTEM`. `SYSTEM` uses Glance `ColorProvider(day, night)`; the others pick one palette. The 1×1 tile keeps its status fill with white text in every theme.
 
 ### Status glyphs (D10)
 
@@ -162,19 +163,21 @@ All `PendingIntent`s are immutable. Every `Intent` carries the `appWidgetId` and
   org/service-api
 ```
 
-The repo list is a screen like any other (its foot holds `~ $ ls repos`, `[⚙]`, `[x]` and the age of the list). Rows are terminal-style, the current repo marked `> ` in the prompt colour, archived repos dim. Rows come from `RepoListStore` (`files/repos.json`): the merged `/user/repos` of every `OK` token, each entry with the id of the token that sees it. The widget only reads this cache; the worker fills it when the view is opened, after a token change and in the settings picker. While the cache is empty the view shows `$ loading…`, errors show in the meta line (`! offline`, …) and the old list stays. The view is per widget (`repo_list_open_{id}`), survives reboots and is only shown in LIST size.
+The repo list is a screen like any other (its foot holds `~ $ ls repos`, `[⚙]`, `[x]` and the age of the list). Rows are terminal-style, the current repo marked `> ` in the prompt colour, archived repos dim. Rows come from `RepoListStore` (`files/repos.json`): the merged `/user/repos` of every `OK` token, each entry with the id of the token that sees it. The widget only reads this cache; the worker fills it when the view is opened, after a token change and in the settings picker. While the cache is empty the view shows `$ loading…`, errors show in the meta line (`! offline`, …) and the old list stays. The view is per widget (`WidgetConfig.view`), survives reboots and is only shown in LIST size.
 
 ## 5. Instances and configuration
 
 - Each `appWidgetId` has its own `WidgetConfig` (ARCHITECTURE.md §4): repo, token id, the screen it shows, the selected column, and the display settings (columns with on/priority/max chars, font size, glyph style, language, sort, pinned branches, filters, max rows, the 1×1 source and tap). There are **no global defaults** (D28); "Reset to defaults" restores one widget's display settings.
 - The settings are screens of the widget in the terminal look (D25, D28): `[<]`/`[x]` and the title are a foot pinned to the bottom; items are `[buttons]`, `[x]` switches and `(*)` radios; buttons wrap whole.
-- Screens: settings (tokens, columns, look, reset, repo link, delete), columns shown, order, width, priority, look (font, symbols with a legend), pinned branches, 1×1. In *order* and *priority* a tap selects a column and `[↑ Up] [↓ Down]` move it; both list only the columns that are shown. In *width* `auto` becomes `[−] n [+]`, a tap on `n` returns to auto.
-- There is no launcher icon (D22). The system's "widget settings" (`android:configure`, `widgetFeatures="reconfigurable|configuration_optional"`) opens `WidgetConfigActivity`: for a big enough widget it has no window, switches the widget to its settings (or to the repo list for a new widget without a repo), redraws the widget (the first update of a widget with a configuration activity may otherwise wait) and finishes; for a small widget it shows the same screens full screen.
+- Screens: settings (tokens with expiry warnings and the last refresh error, columns, list, look, refresh, reset, repo link, delete), columns shown, order, width, priority, sort & filter (sort key, hide idle after N days, max rows, hide branches without runs), pinned branches, look (font, theme, symbols with a legend), 1×1, background refresh (app-wide: interval or off, Wi-Fi only, not on low battery, token expiry warning days).
+- `[Delete]` on a token and `[Reset to defaults]` ask first: a line `Delete token …1c05? [Yes] [No]` appears under the item (D29). Changing screen drops the question. In *order* and *priority* a tap selects a column and `[↑ Up] [↓ Down]` move it; both list only the columns that are shown. In *width* `auto` becomes `[−] n [+]`, a tap on `n` returns to auto.
+- There is no launcher icon (D22). The system's "widget settings" (`android:configure`, `widgetFeatures="reconfigurable|configuration_optional"`) opens `WidgetConfigActivity`: for a big enough widget it finishes at once without a window and, in the background, switches the widget to its settings (or to the repo list for a new widget without a repo) and redraws it, again after 1.5 s because the first update of a widget with a configuration activity may be dropped while the launcher places it; for a small widget it shows the same screens full screen, starting from the stored config. It ignores widget ids that do not belong to this app.
 - When a widget is removed (`onDeleted`), delete its config. Repo caches that no widget references are deleted by the next refresh.
 
 ## 6. Provider XML
 
 `res/xml/cidget_widget_info.xml`:
-- `minWidth`/`minHeight` 40dp, `targetCellWidth="4"`, `targetCellHeight="2"`, `minResizeWidth`/`minResizeHeight` 40dp, `resizeMode="horizontal|vertical"`;
+- `minWidth` 110dp, `minHeight` 40dp, `targetCellWidth="3"`, `targetCellHeight="2"`, `minResizeWidth`/`minResizeHeight` 40dp, `resizeMode="horizontal|vertical"`;
+- `initialLayout` and `previewLayout` = `widget_initial` (the empty dark terminal with `~ $ ci`), so a new widget never shows Glance's "Loading" box;
 - `updatePeriodMillis="0"` (WorkManager schedules refreshes);
-- `widgetCategory="home_screen"`, `previewLayout` (a static layout that looks like the terminal list), `description`.
+- `widgetCategory="home_screen"`, `description`.
