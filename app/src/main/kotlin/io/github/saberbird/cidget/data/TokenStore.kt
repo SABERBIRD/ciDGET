@@ -146,7 +146,7 @@ class TokenStore(
                 val legacy = json.decodeFromString(LegacyPayload.serializer(), text)
                 // Rewrite at once in the new format so the generated id stays the same on the next read.
                 TokenPayload(listOf(SavedToken(UUID.randomUUID().toString(), "", legacy.token, legacy.state, legacy.expiresAt)))
-                    .also { write(it) }
+                    .also { runCatching { write(it) } }
             }
         } catch (_: Exception) {
             // Corrupt file, lost key or bad tag: start clean. Never include the cause; it may hold data.
