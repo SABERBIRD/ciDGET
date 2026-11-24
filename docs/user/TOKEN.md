@@ -1,0 +1,23 @@
+# Creating the GitHub token
+
+ciDGET reads your Actions statuses with a **fine-grained personal access token**. It can only *read*, and only the repositories you choose.
+
+1. Open <https://github.com/settings/personal-access-tokens/new>.
+   (Or: your avatar → **Settings** → **Developer settings** → **Personal access tokens** → **Fine-grained tokens** → **Generate new token**.)
+2. **Token name**: `ciDGET`.
+3. **Expiration**: choose a date, e.g. 1 year. ciDGET warns you 7 days before it expires.
+4. **Resource owner**: your account. For an organization's repositories, choose the organization; its admins may have to approve the token.
+5. **Repository access** → **Only select repositories** → pick the repositories you want in the widget.
+6. **Permissions** → **Repository permissions**:
+   - **Actions** → **Read-only**
+   - **Metadata** → **Read-only** (GitHub adds it automatically)
+   - **Contents** → **Read-only** — *only if the app tells you the branch list needs it* (it then shows branches exactly; without it, statuses are marked `~` as approximate).
+   Leave everything else at **No access**.
+7. **Generate token** and copy it (`github_pat_…`). GitHub shows it only once.
+8. In ciDGET: **Settings → Token → Paste → Save**. The app checks the token before saving.
+
+## Changing or removing it
+
+- **New repositories:** edit the token on GitHub (same page → the token → **Edit** → repository access). No change in the app is needed.
+- **Expired or revoked token** (`! 401 token` in the widget): create a new one and paste it in **Settings → Token**.
+- **Remove:** **Settings → Token → Delete**. The app also deletes its cached data. To revoke the token itself, delete it on GitHub too.
