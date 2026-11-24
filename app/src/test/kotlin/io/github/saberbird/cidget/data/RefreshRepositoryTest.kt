@@ -146,7 +146,7 @@ class RefreshRepositoryTest {
         val first = tokens.summaries.value.first().id
         r.refresh("o/work")
         r.refresh("o/private")
-        assertEquals(listOf(second, first), used)
+        assertEquals(listOf<String?>(second, first), used)
     }
 
     @Test fun invalidTokenOnlyBlocksItsOwnRepos() = runBlocking<Unit> {
