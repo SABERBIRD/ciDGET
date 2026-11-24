@@ -37,6 +37,28 @@ internal class HeadersInterceptor(private val userAgent: String) : Interceptor {
 }
 
 /**
+ * Removes `Authorization` (and `Cookie`) from the response's `Vary` header before the cache sees it.
+ *
+ * GitHub answers `Vary: Accept, Authorization, Cookie, X-GitHub-OTP`. OkHttp's cache stores the request values of
+ * every `Vary` header in the entry's metadata file, so without this the token would be written to disk in plain
+ * text (SECURITY.md rule 1). Sharing entries between tokens is safe: every request is revalidated
+ * (`max-age=0`, see [HeadersInterceptor]) with the request's own token, and GitHub answers 304 only when the body
+ * for that token is the same.
+ */
+internal class StripAuthVaryInterceptor : Interceptor {
+    override fun intercept(chain: Interceptor.Chain): Response {
+        val response = chain.proceed(chain.request())
+        val vary = response.headers.values("Vary")
+        if (vary.isEmpty()) return response
+        val kept = vary.flatMap { it.split(',') }.map { it.trim() }
+            .filter { it.isNotEmpty() && !it.equals("Authorization", true) && !it.equals("Cookie", true) }
+        val builder = response.newBuilder().removeHeader("Vary")
+        if (kept.isNotEmpty()) builder.header("Vary", kept.joinToString(", "))
+        return builder.build()
+    }
+}
+
+/**
  * Builds the OkHttp client for [GitHubClient].
  *
  * @param cacheDir directory for the 10 MB ETag cache (`cacheDir/http` on Android).
@@ -56,6 +78,7 @@ public fun createHttpClient(
     .retryOnConnectionFailure(true)
     .addInterceptor(HeadersInterceptor(userAgent))
     .addInterceptor(AuthInterceptor(tokenProvider))
+    .addNetworkInterceptor(StripAuthVaryInterceptor())
     .build()
 
 /**

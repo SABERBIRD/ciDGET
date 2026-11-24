@@ -31,33 +31,40 @@ import androidx.glance.layout.width
 import androidx.glance.text.FontFamily
 import androidx.glance.text.Text
 import androidx.glance.text.TextStyle
+import androidx.glance.color.ColorProvider as DayNightColorProvider
 import androidx.glance.unit.ColorProvider
+import io.github.saberbird.cidget.core.Theme
 import androidx.compose.ui.unit.dp
 import io.github.saberbird.cidget.action.ActionActivity
 import io.github.saberbird.cidget.graph
-import io.github.saberbird.cidget.widget.CidgetWidget
 import io.github.saberbird.cidget.widget.Glyphs
 import io.github.saberbird.cidget.widget.Palette
 import io.github.saberbird.cidget.widget.config.WidgetConfigActivity
 
-internal fun UiRole.color(): Color = when (this) {
-    UiRole.FG -> Palette.fg
-    UiRole.DIM -> Palette.dim
-    UiRole.PROMPT -> Palette.prompt
-    UiRole.GREEN -> Palette.green
-    UiRole.RED -> Palette.red
-    UiRole.YELLOW -> Palette.yellow
-    UiRole.GREY -> Palette.grey
-    UiRole.LINK -> Palette.link
+/**
+ * The widget's colours for its theme (D12, WIDGET.md §1). `SYSTEM` uses day/night colour providers, so the
+ * launcher switches them with the system's dark mode without a redraw.
+ */
+internal class GlanceColors(theme: Theme) {
+    private fun pick(color: (Palette) -> Color): ColorProvider = when (theme) {
+        Theme.DARK -> ColorProvider(color(Palette.DARK))
+        Theme.LIGHT -> ColorProvider(color(Palette.LIGHT))
+        Theme.SYSTEM -> DayNightColorProvider(day = color(Palette.LIGHT), night = color(Palette.DARK))
+    }
+
+    val bg: ColorProvider = pick { it.bg }
+    private val roles: Map<UiRole, ColorProvider> = UiRole.entries.associateWith { role -> pick { it.of(role) } }
+
+    fun of(role: UiRole): ColorProvider = roles.getValue(role)
 }
 
-/** Runs a [UiAction.Do] from a widget tap and redraws that widget. */
+/** Runs a [UiAction.Do] from a widget tap; the controller redraws the widget. */
 class UiCallback : ActionCallback {
     override suspend fun onAction(context: Context, glanceId: GlanceId, parameters: ActionParameters) {
-        val kind = parameters[KIND] ?: return
+        val cmd = enumOrNull<Cmd>(parameters[KIND].orEmpty()) ?: return
         val appWidgetId = GlanceAppWidgetManager(context).getAppWidgetId(glanceId)
-        UiController(context.graph).handle(appWidgetId, UiAction.Do(kind, parameters[ARG].orEmpty(), parameters[ARG2].orEmpty()))
-        CidgetWidget().update(context, glanceId)
+        // The controller queues the redraw; it is merged with the redraws the change itself triggers.
+        UiController(context.graph).handle(appWidgetId, UiAction.Do(cmd, parameters[ARG].orEmpty(), parameters[ARG2].orEmpty()))
     }
 
     companion object {
@@ -70,7 +77,7 @@ class UiCallback : ActionCallback {
 /** Maps a model action to a Glance action. */
 internal fun UiAction.toGlance(context: Context, appWidgetId: Int): Action = when (this) {
     is UiAction.Do -> actionRunCallback<UiCallback>(
-        actionParametersOf(UiCallback.KIND to kind, UiCallback.ARG to arg, UiCallback.ARG2 to arg2),
+        actionParametersOf(UiCallback.KIND to cmd.name, UiCallback.ARG to arg, UiCallback.ARG2 to arg2),
     )
     is UiAction.Open -> actionStartActivity(
         Intent(Intent.ACTION_VIEW, Uri.parse(url)).putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId),
@@ -86,36 +93,36 @@ internal fun UiAction.toGlance(context: Context, appWidgetId: Int): Action = whe
 internal fun uninstallIntent(context: Context): Intent =
     Intent(Intent.ACTION_DELETE, Uri.parse("package:${context.packageName}")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
 
-private fun textStyle(color: Color, sp: Int) = TextStyle(color = ColorProvider(color), fontFamily = FontFamily.Monospace, fontSize = sp.sp)
+private fun textStyle(color: ColorProvider, sp: Int) = TextStyle(color = color, fontFamily = FontFamily.Monospace, fontSize = sp.sp)
 
 /** Draws a [UiScreen]: the body scrolls, the foot stays at the bottom. */
 @Composable
-internal fun GlanceScreen(screen: UiScreen, appWidgetId: Int, sp: Int) {
+internal fun GlanceScreen(screen: UiScreen, appWidgetId: Int, sp: Int, colors: GlanceColors) {
     val context = LocalContext.current
-    Column(GlanceModifier.fillMaxSize().background(Palette.bg).padding(8.dp)) {
+    Column(GlanceModifier.fillMaxSize().background(colors.bg).padding(8.dp)) {
         LazyColumn(GlanceModifier.fillMaxWidth().defaultWeight()) {
-            items(screen.body.indices.toList()) { i -> GlanceLine(screen.body[i], context, appWidgetId, sp) }
+            items(screen.body.indices.toList()) { i -> GlanceLine(screen.body[i], context, appWidgetId, sp, colors) }
         }
-        screen.foot.forEach { GlanceLine(it, context, appWidgetId, sp, footRow = true) }
+        screen.foot.forEach { GlanceLine(it, context, appWidgetId, sp, colors, footRow = true) }
     }
 }
 
 @Composable
-private fun GlanceLine(line: UiLine, context: Context, appWidgetId: Int, sp: Int, footRow: Boolean = false) {
+private fun GlanceLine(line: UiLine, context: Context, appWidgetId: Int, sp: Int, colors: GlanceColors, footRow: Boolean = false) {
     val oneSpan = line.left.size == 1 && line.right.isEmpty() && line.action == null
     var modifier = GlanceModifier.fillMaxWidth()
     line.action?.let { modifier = modifier.clickable(it.toGlance(context, appWidgetId)) }
     Row(modifier) {
-        line.left.forEach { GlanceSpan(it, context, appWidgetId, sp, wrap = oneSpan && !footRow) }
+        line.left.forEach { GlanceSpan(it, context, appWidgetId, sp, colors, wrap = oneSpan && !footRow) }
         if (line.right.isNotEmpty()) {
             Spacer(GlanceModifier.defaultWeight())
-            line.right.forEach { GlanceSpan(it, context, appWidgetId, sp, wrap = false) }
+            line.right.forEach { GlanceSpan(it, context, appWidgetId, sp, colors, wrap = false) }
         }
     }
 }
 
 @Composable
-private fun GlanceSpan(span: UiSpan, context: Context, appWidgetId: Int, sp: Int, wrap: Boolean) {
+private fun GlanceSpan(span: UiSpan, context: Context, appWidgetId: Int, sp: Int, colors: GlanceColors, wrap: Boolean) {
     var modifier: GlanceModifier = GlanceModifier
     if (wrap) modifier = modifier.fillMaxWidth()
     span.cells?.let { n ->
@@ -123,5 +130,5 @@ private fun GlanceSpan(span: UiSpan, context: Context, appWidgetId: Int, sp: Int
         modifier = modifier.width((widthDp + 1f).dp)
     }
     span.action?.let { modifier = modifier.clickable(it.toGlance(context, appWidgetId)) }
-    Text(span.text, style = textStyle(span.role.color(), sp), maxLines = if (wrap) Int.MAX_VALUE else 1, modifier = modifier)
+    Text(span.text, style = textStyle(colors.of(span.role), sp), maxLines = if (wrap) Int.MAX_VALUE else 1, modifier = modifier)
 }

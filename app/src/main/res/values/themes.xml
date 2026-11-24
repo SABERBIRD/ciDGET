@@ -6,9 +6,6 @@
     <style name="Theme.Cidget.Config" parent="android:Theme.Translucent.NoTitleBar">
         <item name="android:windowAnimationStyle">@null</item>
         <item name="android:windowBackground">@android:color/transparent</item>
-        <item name="android:statusBarColor">#101214</item>
-        <item name="android:navigationBarColor">#101214</item>
-        <item name="android:windowLightStatusBar">false</item>
     </style>
     <!-- Invisible trampoline for COPY/SHARE: no window, no animation. -->
     <style name="Theme.Cidget.Transparent" parent="android:Theme.Translucent.NoTitleBar">

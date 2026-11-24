@@ -1,5 +1,6 @@
 package io.github.saberbird.cidget.settings
 
+import io.github.saberbird.cidget.data.TokenStoreUnavailableException
 import io.github.saberbird.cidget.di.AppGraph
 import io.github.saberbird.cidget.github.ApiError
 import io.github.saberbird.cidget.github.ApiResult
@@ -22,7 +23,11 @@ class TokenController(private val graph: AppGraph) {
         val probe = GitHubClient(graph.http.withToken(token))
         return when (val r = probe.listUserRepos(maxPages = 1, perPage = 1)) {
             is ApiResult.Ok -> {
-                graph.tokenStore.add(token, label, r.meta.tokenExpiresAt, replaceId)
+                try {
+                    graph.tokenStore.add(token, label, r.meta.tokenExpiresAt, replaceId)
+                } catch (_: TokenStoreUnavailableException) {
+                    return SaveResult.Failed(ApiError.Unexpected)
+                }
                 graph.onTokensChanged(removed = false)
                 SaveResult.Saved
             }
@@ -32,7 +37,11 @@ class TokenController(private val graph: AppGraph) {
 
     /** Removes token [id], the HTTP cache and the snapshots, then refreshes widgets. */
     suspend fun delete(id: String) {
-        graph.tokenStore.remove(id)
+        try {
+            graph.tokenStore.remove(id)
+        } catch (_: TokenStoreUnavailableException) {
+            return
+        }
         graph.onTokensChanged(removed = true)
     }
 }

@@ -3,6 +3,10 @@ package io.github.saberbird.cidget.di
 import android.app.Application
 import android.content.pm.ApplicationInfo
 import android.util.Log
+import androidx.glance.appwidget.GlanceAppWidgetManager
+import androidx.glance.appwidget.updateAll
+import io.github.saberbird.cidget.core.WidgetConfig
+import io.github.saberbird.cidget.core.WidgetView
 import io.github.saberbird.cidget.data.KeystoreKeyProvider
 import io.github.saberbird.cidget.data.RefreshRepository
 import io.github.saberbird.cidget.data.RepoFetcher
@@ -10,22 +14,21 @@ import io.github.saberbird.cidget.data.RepoListRepository
 import io.github.saberbird.cidget.data.RepoListStore
 import io.github.saberbird.cidget.data.SettingsRepository
 import io.github.saberbird.cidget.data.SnapshotStore
-import io.github.saberbird.cidget.widget.CidgetWidget
-import androidx.glance.appwidget.updateAll
-import kotlinx.datetime.Clock
-import io.github.saberbird.cidget.github.fetchRepoState
-import io.github.saberbird.cidget.github.withTokenProvider
-import io.github.saberbird.cidget.work.RefreshScheduler
 import io.github.saberbird.cidget.data.TokenStore
 import io.github.saberbird.cidget.github.GitHubClient
 import io.github.saberbird.cidget.github.createHttpClient
+import io.github.saberbird.cidget.github.fetchRepoState
+import io.github.saberbird.cidget.github.withTokenProvider
+import io.github.saberbird.cidget.widget.CidgetWidget
+import io.github.saberbird.cidget.work.RefreshScheduler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.flow.conflate
-import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.datetime.Clock
 import okhttp3.OkHttpClient
 import java.io.File
 
@@ -33,8 +36,12 @@ import java.io.File
 class AppGraph(val app: Application) {
     val tokenStore: TokenStore = TokenStore(File(app.filesDir, "token.bin"), KeystoreKeyProvider())
 
+    /**
+     * Shared OkHttp client with the ETag cache. The cache directory is `http2`: entries written before the
+     * `Vary: Authorization` fix (see `createHttpClient`) could hold a token, so the old `http` directory is deleted.
+     */
     val http: OkHttpClient = createHttpClient(
-        cacheDir = File(app.cacheDir, "http"),
+        cacheDir = File(app.cacheDir, "http2"),
         userAgent = "ciDGET/${versionName()}",
         tokenProvider = { tokenStore.usableToken(null) },
     )
@@ -57,8 +64,24 @@ class AppGraph(val app: Application) {
 
     val settings: SettingsRepository = SettingsRepository(app)
 
-    /** Redraws every widget from the local stores. */
-    suspend fun updateWidgets() = CidgetWidget().updateAll(app)
+    // Redraw requests are queued and merged: a tap or a refresh asks for a redraw from several places, and every
+    // Glance update re-renders the whole widget. One update per widget per burst keeps taps fast.
+    private val redraws = Channel<Int>(Channel.UNLIMITED)
+
+    /** Redraws widget [appWidgetId] soon (merged with other requests). */
+    fun redraw(appWidgetId: Int) {
+        redraws.trySend(appWidgetId)
+    }
+
+    /** Redraws every widget soon. */
+    fun redrawAll() {
+        redraws.trySend(ALL)
+    }
+
+    /** Redraws the widgets that show [repo]. */
+    suspend fun redrawRepo(repo: String) {
+        settings.allWidgets().filterValues { it.repo == repo }.keys.forEach(::redraw)
+    }
 
     val refresh: RefreshRepository = RefreshRepository(
         tokens = tokenStore,
@@ -66,7 +89,7 @@ class AppGraph(val app: Application) {
         fetcher = RepoFetcher { tokenId, owner, repo, s -> githubFor(tokenId).fetchRepoState(owner, repo, s) },
         tokenIdFor = settings::tokenIdForRepo,
         clock = Clock.System,
-        onChanged = ::updateWidgets,
+        onChanged = ::redrawRepo,
     )
 
     val repoListStore: RepoListStore = RepoListStore(File(app.filesDir, "repos.json"))
@@ -76,7 +99,7 @@ class AppGraph(val app: Application) {
         store = repoListStore,
         listFor = { tokenId -> githubFor(tokenId).listUserRepos() },
         clock = Clock.System,
-        onChanged = ::updateWidgets,
+        onChanged = { redrawAll() },
     )
 
     /** Shows "loading" in the widget's repo list at once, then queues the worker that refreshes it. */
@@ -88,6 +111,26 @@ class AppGraph(val app: Application) {
     }
 
     /**
+     * Opens the in-widget screen [requested] (or, by default, the repo list for a new widget without a repo when a
+     * token exists, else the settings) and redraws the widget. Returns the stored config. Used by the system's
+     * "widget settings" entry.
+     */
+    suspend fun openInWidget(appWidgetId: Int, requested: WidgetView?): WidgetConfig {
+        val current = settings.getWidgetConfig(appWidgetId)
+        val view = requested ?: if (current.repo == null && tokenStore.hasToken()) WidgetView.REPOS else WidgetView.SETTINGS
+        settings.updateWidget(appWidgetId) { it.copy(view = view, confirm = null) }
+        if (view == WidgetView.REPOS) requestRepoList()
+        redraw(appWidgetId)
+        // The first update of a widget that has a configuration activity can be dropped while the launcher is
+        // still placing it; draw it again once it is surely on the home screen.
+        background.launch {
+            delay(FIRST_DRAW_RETRY_MS)
+            redraw(appWidgetId)
+        }
+        return settings.getWidgetConfig(appWidgetId)
+    }
+
+    /**
      * Picks [repo] (seen by [tokenId]) for widget [appWidgetId], returns it to the branch list, prunes snapshots and
      * queues a refresh of the repo.
      */
@@ -96,12 +139,14 @@ class AppGraph(val app: Application) {
         // One atomic write (also back to the branch list); the widget observes it and redraws, so the switch is
         // instant (D26).
         settings.setWidgetRepo(appWidgetId, repo, tokenId)
+        redraw(appWidgetId)
         // Everything slower runs in the background, so the next tap is never waiting for this repo.
         background.launch {
             val inUse = settings.reposInUse()
             if (before != null && before != repo && before !in inUse) RefreshScheduler.cancel(app, before)
             snapshots.deleteExcept(inUse)
             requestRefresh(repo)
+            schedulePeriodic()
         }
     }
 
@@ -112,6 +157,11 @@ class AppGraph(val app: Application) {
 
     /** Queues a refresh for [repo] (`owner/repo`). */
     fun refreshNow(repo: String) = RefreshScheduler.refreshNow(app, repo)
+
+    /** Matches the periodic background refresh to the settings and the repos shown (T11). */
+    suspend fun schedulePeriodic() {
+        runCatching { RefreshScheduler.schedulePeriodic(app, this) }
+    }
 
     /** Drops cached API responses; they may hold private repository data. */
     suspend fun evictHttpCache() = withContext(Dispatchers.IO) { runCatching { http.cache?.evictAll() }; Unit }
@@ -126,7 +176,7 @@ class AppGraph(val app: Application) {
             snapshots.deleteAll()
             repoListStore.clear()
         }
-        updateWidgets()
+        redrawAll()
         if (tokenStore.hasToken()) {
             settings.reposInUse().forEach(::refreshNow)
             RefreshScheduler.refreshRepoList(app)
@@ -134,13 +184,35 @@ class AppGraph(val app: Application) {
     }
 
     init {
-        // Redraw widgets after every settings change, from the widget callbacks and from the settings screens
-        // alike (an idle Glance session would otherwise keep showing the old state).
         background.launch {
-            settings.changes().drop(1).conflate().collect { runCatching { updateWidgets() } }
+            for (first in redraws) {
+                delay(REDRAW_MERGE_MS)
+                val ids = mutableSetOf(first)
+                while (true) ids += redraws.tryReceive().getOrNull() ?: break
+                if (ALL in ids) {
+                    runCatching { CidgetWidget().updateAll(app) }
+                } else {
+                    val manager = GlanceAppWidgetManager(app)
+                    ids.forEach { id -> runCatching { CidgetWidget().update(app, manager.getGlanceIdBy(id)) } }
+                }
+            }
+        }
+        background.launch(Dispatchers.IO) {
+            // One-time cleanup: the cache before the Vary fix may hold tokens in its entry metadata.
+            runCatching { File(app.cacheDir, "http").takeIf { it.exists() }?.deleteRecursively() }
+        }
+        background.launch {
+            runCatching { settings.dropLegacyKeys() }
+            schedulePeriodic()
         }
     }
 
     private fun versionName(): String =
         runCatching { app.packageManager.getPackageInfo(app.packageName, 0).versionName }.getOrNull() ?: "0"
+
+    private companion object {
+        const val ALL = Int.MIN_VALUE
+        const val REDRAW_MERGE_MS = 30L
+        const val FIRST_DRAW_RETRY_MS = 1500L
+    }
 }

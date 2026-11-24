@@ -2,6 +2,7 @@
 <resources>
     <!-- Not translated on purpose: the debug build overrides it with "ciDGET debug". -->
     <string name="app_name" translatable="false">ciDGET</string>
+    <string name="widget_initial_text" translatable="false">~ $ ci</string>
     <string name="widget_description">CI status of the branches of one repository</string>
     <string name="token_expires">Expires %1$s</string>
     <string name="token_no_expiry">No expiry date</string>
@@ -100,4 +101,39 @@
     <string name="ui_tap_refresh">Refresh</string>
     <string name="ui_tap_copy">Copy the run link</string>
     <string name="ui_h_tiny_note">Pinned: the first pinned branch, or the first row if none is pinned.</string>
+    <string name="ui_btn_yes">[Yes]</string>
+    <string name="ui_btn_no">[No]</string>
+    <string name="ui_ask_delete_token">Delete token …%1$s?</string>
+    <string name="ui_ask_reset">Reset this widget\'s look?</string>
+    <string name="w_stale">stale %1$s</string>
+    <string name="w_token_expires">! token expires in %1$s</string>
+    <string name="w_today">today</string>
+    <string name="ui_sec_list">List</string>
+    <string name="ui_sec_refresh">Refresh (all widgets)</string>
+    <string name="ui_btn_filters">[Sort &amp; filter]</string>
+    <string name="ui_btn_refresh">[Background refresh]</string>
+    <string name="ui_t_filters">sort &amp; filter</string>
+    <string name="ui_t_refresh">refresh</string>
+    <string name="ui_sort">Sort by</string>
+    <string name="ui_sort_recent">Recent activity</string>
+    <string name="ui_sort_status">Status (failed first)</string>
+    <string name="ui_sort_name">Name</string>
+    <string name="ui_idle">Hide idle after</string>
+    <string name="ui_days">%1$d d</string>
+    <string name="ui_never">never</string>
+    <string name="ui_rows">Max rows</string>
+    <string name="ui_all">all</string>
+    <string name="ui_hide_no_runs">Hide branches without runs</string>
+    <string name="ui_every">Every</string>
+    <string name="ui_minutes">%1$d min</string>
+    <string name="ui_off">off</string>
+    <string name="ui_wifi_only">Only on Wi-Fi</string>
+    <string name="ui_battery">Not when the battery is low</string>
+    <string name="ui_expiry_warn">Warn before token expiry</string>
+    <string name="ui_h_refresh">These settings apply to all widgets. Data older than twice the interval is marked stale.</string>
+    <string name="ui_theme">Theme</string>
+    <string name="ui_theme_dark">Dark</string>
+    <string name="ui_theme_light">Light</string>
+    <string name="ui_theme_system">Follow system</string>
+    <string name="ui_last_error">Last refresh: %1$s</string>
 </resources>

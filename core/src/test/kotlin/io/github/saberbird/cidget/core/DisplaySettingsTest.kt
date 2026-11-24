@@ -101,4 +101,26 @@ class DisplaySettingsTest {
         assertEquals(c, json.decodeFromString(WidgetConfig.serializer(), json.encodeToString(WidgetConfig.serializer(), c)))
         assertEquals(WidgetConfig("x/y"), json.decodeFromString(WidgetConfig.serializer(), """{"repo":"x/y","future":1,"useGlobalDefaults":true}"""))
     }
+
+    @Test fun idleAndRowStepsWalkTheChoicesAndEndInOff() {
+        val d = DisplaySettings()
+        assertEquals(60, d.withIdleDaysStep(1).hideIdleDays)
+        assertEquals(14, d.withIdleDaysStep(-1).hideIdleDays)
+        assertNull(DisplaySettings(hideIdleDays = 365).withIdleDaysStep(1).hideIdleDays)
+        assertNull(DisplaySettings(hideIdleDays = null).withIdleDaysStep(1).hideIdleDays)
+        assertEquals(365, DisplaySettings(hideIdleDays = null).withIdleDaysStep(-1).hideIdleDays)
+        assertEquals(1, DisplaySettings(hideIdleDays = 1).withIdleDaysStep(-1).hideIdleDays)
+        // A value that is not a step (older settings) restarts from the default.
+        assertEquals(60, DisplaySettings(hideIdleDays = 45).withIdleDaysStep(1).hideIdleDays)
+        assertEquals(100, d.withMaxRowsStep(1).maxRows)
+        assertNull(d.withMaxRowsStep(2).maxRows)
+        assertEquals(5, DisplaySettings(maxRows = 5).withMaxRowsStep(-1).maxRows)
+    }
+
+    @Test fun confirmAndThemeSurviveSerialization() {
+        val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
+        val c = WidgetConfig("o/r", display = DisplaySettings(theme = Theme.SYSTEM), confirm = Confirm(ConfirmKind.DELETE_TOKEN, "id1"))
+        assertEquals(c, json.decodeFromString(WidgetConfig.serializer(), json.encodeToString(WidgetConfig.serializer(), c)))
+        assertEquals(Theme.DARK, DisplaySettings().theme)
+    }
 }

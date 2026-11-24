@@ -17,13 +17,17 @@ public enum class TinySource { WORST, PINNED, LAST }
 @Serializable
 public enum class TinyTap { RUN, REFRESH, COPY }
 
+/** Colour theme (D12): dark terminal by default, light, or following the system's dark mode. */
+@Serializable
+public enum class Theme { DARK, LIGHT, SYSTEM }
+
 /** UI language (D28). English is the default. */
 @Serializable
 public enum class Language(public val tag: String) { EN("en"), UK("uk") }
 
 /** The screen a widget shows (D28): the branch list, the repo list or one of the settings screens. */
 @Serializable
-public enum class WidgetView { BRANCHES, REPOS, SETTINGS, SHOWN, ORDER, WIDTH, PRIORITY, DISPLAY, PINNED, TINY }
+public enum class WidgetView { BRANCHES, REPOS, SETTINGS, SHOWN, ORDER, WIDTH, PRIORITY, DISPLAY, PINNED, TINY, FILTERS, REFRESH }
 
 /** Everything about how a widget looks and what it lists. Each widget owns its copy (D28, WIDGET.md §5). */
 @Serializable
@@ -41,6 +45,7 @@ public data class DisplaySettings(
     val hideIdleDays: Int? = 30,
     val maxRows: Int? = 50,
     val hideBranchesWithoutRuns: Boolean = false,
+    val theme: Theme = Theme.DARK,
 ) {
     /** The filter/sort options for [selectBranches]. */
     public fun viewOptions(): ViewOptions = ViewOptions(pinned, sortKey, hideIdleDays, maxRows, hideBranchesWithoutRuns)
@@ -130,6 +135,12 @@ public data class DisplaySettings(
     public fun withPinToggled(branch: String): DisplaySettings =
         copy(pinned = if (branch in pinned) pinned - branch else pinned + branch)
 
+    /** Copy with "hide idle branches after N days" moved one step along [IDLE_STEPS] (the last step, null, is off). */
+    public fun withIdleDaysStep(delta: Int): DisplaySettings = copy(hideIdleDays = step(IDLE_STEPS, hideIdleDays, delta, 30))
+
+    /** Copy with the row limit moved one step along [ROW_STEPS] (the last step, null, is no limit). */
+    public fun withMaxRowsStep(delta: Int): DisplaySettings = copy(maxRows = step(ROW_STEPS, maxRows, delta, 50))
+
     /** Copy with a font size clamped to 11–16 sp. */
     public fun withFontSize(sp: Int): DisplaySettings = copy(fontSizeSp = sp.coerceIn(MIN_FONT_SP, MAX_FONT_SP))
 
@@ -153,6 +164,17 @@ public data class DisplaySettings(
         public const val MAX_FONT_SP: Int = 16
         public const val DEFAULT_FONT_SP: Int = 13
         private const val DEFAULT_CAP: Int = 10
+
+        /** Choices for [hideIdleDays]; null = never hide. */
+        public val IDLE_STEPS: List<Int?> = listOf(1, 3, 7, 14, 30, 60, 90, 180, 365, null)
+
+        /** Choices for [maxRows]; null = no limit. */
+        public val ROW_STEPS: List<Int?> = listOf(5, 10, 20, 30, 50, 100, null)
+
+        private fun step(steps: List<Int?>, current: Int?, delta: Int, fallback: Int): Int? {
+            val i = steps.indexOf(current).takeIf { it >= 0 } ?: steps.indexOf(fallback)
+            return steps[(i + delta).coerceIn(0, steps.lastIndex)]
+        }
     }
 }
 
@@ -168,4 +190,21 @@ public data class WidgetConfig(
     val view: WidgetView = WidgetView.BRANCHES,
     /** The column selected on the order and priority screens. */
     val selected: ColumnId? = null,
+    /**
+     * A destructive action waiting for a second tap (`[Yes]`), such as deleting a token; null when none. It is
+     * cleared by any change of screen.
+     */
+    val confirm: Confirm? = null,
 )
+
+/** A destructive action that needs a second tap. */
+@Serializable
+public data class Confirm(
+    val kind: ConfirmKind,
+    /** The action's target, such as a token id; empty when it has none. */
+    val target: String = "",
+)
+
+/** Kinds of [Confirm]. */
+@Serializable
+public enum class ConfirmKind { DELETE_TOKEN, RESET }

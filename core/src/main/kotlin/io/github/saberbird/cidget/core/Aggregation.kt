@@ -12,15 +12,16 @@ private fun List<Run>.newest(): Run? = minWithOrNull(newestFirst)
  */
 public fun aggregate(input: AggregationInput): AggregationResult {
     val runsByBranch: Map<String, List<Run>> = input.runs
-        .filter { it.headBranch != null && !it.fromFork }
-        .groupBy { it.headBranch!! }
+        .filter { !it.fromFork }
+        .mapNotNull { run -> run.headBranch?.let { it to run } }
+        .groupBy({ it.first }, { it.second })
     val heads = input.heads
     val headShas: Map<String, String>? = heads?.associate { it.name to it.sha }
 
-    val names: List<String> = if (heads == null) {
+    val names: List<String> = if (heads == null || headShas == null) {
         runsByBranch.keys.sorted()
     } else {
-        val extra = if (input.headsComplete) emptyList() else runsByBranch.keys.filter { it !in headShas!! }.sorted()
+        val extra = if (input.headsComplete) emptyList() else runsByBranch.keys.filter { it !in headShas }.sorted()
         heads.map { it.name }.distinct() + extra
     }
 

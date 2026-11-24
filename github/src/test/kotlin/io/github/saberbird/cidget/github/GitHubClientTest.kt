@@ -93,6 +93,22 @@ class GitHubClientTest {
         assertEquals("max-age=0", req2.headers["Cache-Control"])
     }
 
+    @Test fun tokenNeverReachesTheDiskCache() = runBlocking<Unit> {
+        val vary = "Accept, Authorization, Cookie, X-GitHub-OTP"
+        val body = json("""[{"full_name":"o/a"}]""", "ETag" to "W/\"abc\"", "Cache-Control" to "private, max-age=60, s-maxage=60", "Vary" to vary)
+        h.server.enqueue(body)
+        h.server.enqueue(MockResponse.Builder().code(304).addHeader("ETag", "W/\"abc\"").addHeader("Vary", vary).build())
+        h.client.listUserRepos()
+        // The entry is still used: the second request revalidates and is served from the cache.
+        val second = h.client.listUserRepos()
+        assertEquals("o/a", second.ok().single().fullName)
+        assertTrue(second.meta.notModified)
+        h.http.cache?.flush()
+        val files = h.cacheDir.walk().filter { it.isFile }.toList()
+        assertTrue(files.isNotEmpty())
+        files.forEach { f -> assertFalse(f.readText(Charsets.ISO_8859_1).contains(FAKE_TOKEN), "token in ${f.name}") }
+    }
+
     private fun errorFor(code: Int, vararg headers: Pair<String, String>): ApiError = runBlocking {
         h.server.enqueue(MockResponse.Builder().code(code).apply { headers.forEach { addHeader(it.first, it.second) } }.body("{}").build())
         h.client.getRepo("o", "r").err()

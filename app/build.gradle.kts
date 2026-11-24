@@ -57,6 +57,8 @@ android {
 
     lint {
         abortOnError = true
+        // T15: every user-visible string must exist in values/ and values-uk/.
+        error += "MissingTranslation"
     }
 }
 

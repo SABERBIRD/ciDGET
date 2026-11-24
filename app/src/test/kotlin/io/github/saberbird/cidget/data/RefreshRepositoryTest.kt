@@ -159,4 +159,20 @@ class RefreshRepositoryTest {
         r.refresh("o/work")
         assertEquals(1, calls)
     }
+
+    @Test fun preparedRefreshThatCannotRunClearsTheIndicator() = runBlocking<Unit> {
+        assertTrue(repo.prepare("o/r"))
+        assertTrue(assertNotNull(snapshots.get("o/r")).refreshing)
+        // The token turns invalid (another repo got a 401) before the queued work runs.
+        tokens.markInvalid(null)
+        assertEquals(RefreshOutcome.SUCCESS, repo.refresh("o/r"))
+        assertFalse(assertNotNull(snapshots.get("o/r")).refreshing)
+        assertEquals(0, calls)
+    }
+
+    @Test fun storedRefreshingFlagIsDroppedOnLoad() = runBlocking<Unit> {
+        repo.prepare("o/r")
+        val reopened = SnapshotStore(java.io.File(dir, "snapshots"))
+        assertFalse(assertNotNull(reopened.get("o/r")).refreshing)
+    }
 }

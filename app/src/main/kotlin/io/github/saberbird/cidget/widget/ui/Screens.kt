@@ -2,7 +2,12 @@ package io.github.saberbird.cidget.widget.ui
 
 import android.content.Context
 import io.github.saberbird.cidget.R
+import io.github.saberbird.cidget.core.AppSettings
 import io.github.saberbird.cidget.core.ColumnId
+import io.github.saberbird.cidget.core.SortKey
+import io.github.saberbird.cidget.core.Theme
+import io.github.saberbird.cidget.core.expiryWarningDays
+import io.github.saberbird.cidget.core.ConfirmKind
 import io.github.saberbird.cidget.core.DisplaySettings
 import io.github.saberbird.cidget.core.GlyphStyle
 import io.github.saberbird.cidget.core.Status
@@ -23,6 +28,7 @@ import io.github.saberbird.cidget.data.RepoSnapshot
 import io.github.saberbird.cidget.data.TokenState
 import io.github.saberbird.cidget.data.TokenSummary
 import io.github.saberbird.cidget.widget.Glyphs
+import io.github.saberbird.cidget.widget.expiryText
 import io.github.saberbird.cidget.widget.metaLine
 import io.github.saberbird.cidget.widget.widgetText
 import kotlinx.datetime.Instant
@@ -47,13 +53,19 @@ internal class UiEnv(
     val now: Instant,
     val glyphs: Glyphs,
     val cpl: Int,
+    /** App-wide settings (refresh, expiry warning). */
+    val app: AppSettings = AppSettings(),
 ) {
     val display: DisplaySettings get() = config.display
+
+    /** Expiry of the token this widget uses (the one [TokenStore.resolveId] picks), if known. */
+    val tokenExpiresAt: Instant?
+        get() = (tokens.firstOrNull { it.id == config.tokenId } ?: tokens.firstOrNull { it.state == TokenState.OK } ?: tokens.firstOrNull())?.expiresAt
     fun str(res: Int): String = ctx.getString(res)
     fun str(res: Int, vararg args: Any): String = ctx.getString(res, *args)
 }
 
-private fun go(v: WidgetView) = UiAction.Do("view", v.name)
+private fun go(v: WidgetView) = UiAction.Do(Cmd.VIEW, v.name)
 
 private fun columnName(e: UiEnv, id: ColumnId): String = e.str(
     when (id) {
@@ -90,6 +102,8 @@ internal fun buildScreen(e: UiEnv): UiScreen = when (e.config.view) {
     WidgetView.DISPLAY -> displayScreen(e)
     WidgetView.PINNED -> pinnedScreen(e)
     WidgetView.TINY -> tinyScreen(e)
+    WidgetView.FILTERS -> filtersScreen(e)
+    WidgetView.REFRESH -> refreshScreen(e)
 }
 
 private fun statusRole(s: Status): UiRole = when (s) {
@@ -120,11 +134,11 @@ private fun branchesScreen(e: UiEnv): UiScreen {
     val name = repo?.substringAfter('/') ?: ""
     val prompt = span("~/$name $ ci", UiRole.PROMPT, if (tokenPresent && !tokenInvalid) go(WidgetView.REPOS) else go(WidgetView.SETTINGS))
     val refresh = if (repo != null && tokenPresent) {
-        listOf(span(if (e.snapshot?.refreshing == true) "[...]" else "[${e.glyphs.refresh}]", UiRole.DIM, UiAction.Do("refresh")))
+        listOf(span(if (e.snapshot?.refreshing == true) "[...]" else "[${e.glyphs.refresh}]", UiRole.DIM, UiAction.Do(Cmd.REFRESH)))
     } else {
         emptyList()
     }
-    val meta = metaLine(e.ctx, e.snapshot, tokenPresent, tokenInvalid, e.now)
+    val meta = metaLine(e.ctx, e.snapshot, tokenPresent, tokenInvalid, e.now, e.app, e.tokenExpiresAt)
     val foot = footWithMeta(prompt, refresh, meta, e.cpl)
     val snapshot = e.snapshot
     val body = when {
@@ -188,7 +202,7 @@ private fun reposScreen(e: UiEnv): UiScreen {
                 r.archived -> UiRole.DIM
                 else -> UiRole.FG
             }
-            line((if (current) "> " else "  ") + r.fullName, role, UiAction.Do("pick", r.fullName, r.tokenId))
+            line((if (current) "> " else "  ") + r.fullName, role, UiAction.Do(Cmd.PICK, r.fullName, r.tokenId))
         }
     }
     return UiScreen(body, foot)
@@ -205,14 +219,19 @@ private fun settingsScreen(e: UiEnv): UiScreen {
     val body = mutableListOf<UiLine>()
     body += section(e.str(R.string.ui_sec_tokens))
     if (e.tokens.isEmpty()) body += line(e.str(R.string.w_no_token), UiRole.DIM)
+    val confirm = e.config.confirm
     e.tokens.forEach { t ->
         body += UiLine(
             listOf(span(e.str(R.string.ui_token_line, t.last4))),
-            listOf(span(e.str(R.string.ui_btn_delete), UiRole.RED, UiAction.Do("deltoken", t.id))),
+            listOf(span(e.str(R.string.ui_btn_delete), UiRole.RED, UiAction.Do(Cmd.ASK, ConfirmKind.DELETE_TOKEN.name, t.id))),
         )
+        if (confirm?.kind == ConfirmKind.DELETE_TOKEN && confirm.target == t.id) body += confirmLine(e, e.str(R.string.ui_ask_delete_token, t.last4))
         body += line(expiryText(e, t), UiRole.DIM)
         if (t.state == TokenState.INVALID) body += line(e.str(R.string.w_err_token), UiRole.RED)
+        expiryWarningDays(t.expiresAt, e.now, e.app)?.let { body += line(expiryText(e.ctx, it), UiRole.YELLOW) }
     }
+    // The last refresh error of this widget's repo, so it can be read without leaving the settings.
+    e.snapshot?.error?.let { body += line(e.str(R.string.ui_last_error, it.widgetText(e.ctx)), UiRole.RED) }
     body += wrapItems(
         listOf(span(e.str(R.string.ui_btn_paste), UiRole.FG, UiAction.Paste), span(e.str(R.string.ui_btn_howto), UiRole.LINK, UiAction.Open(TOKEN_HELP_URL))),
         e.cpl,
@@ -228,46 +247,66 @@ private fun settingsScreen(e: UiEnv): UiScreen {
         ),
         e.cpl,
     )
+    body += section(e.str(R.string.ui_sec_list))
+    body += wrapItems(
+        listOf(
+            span(e.str(R.string.ui_btn_filters), UiRole.FG, go(WidgetView.FILTERS)),
+            span(e.str(R.string.ui_btn_pinned), UiRole.FG, go(WidgetView.PINNED)),
+        ),
+        e.cpl,
+    )
     body += section(e.str(R.string.ui_sec_look))
     body += wrapItems(
         listOf(
             span(e.str(R.string.ui_btn_look), UiRole.FG, go(WidgetView.DISPLAY)),
-            span(e.str(R.string.ui_btn_pinned), UiRole.FG, go(WidgetView.PINNED)),
             span(e.str(R.string.ui_btn_tiny), UiRole.FG, go(WidgetView.TINY)),
-            span(e.str(R.string.ui_btn_lang), UiRole.FG, UiAction.Do("lang")),
+            span(e.str(R.string.ui_btn_lang), UiRole.FG, UiAction.Do(Cmd.LANG)),
         ),
         e.cpl,
     )
+    body += section(e.str(R.string.ui_sec_refresh))
+    body += line(e.str(R.string.ui_btn_refresh), UiRole.FG, go(WidgetView.REFRESH))
     body += rule()
-    body += line(e.str(R.string.ui_btn_reset), UiRole.FG, UiAction.Do("reset"))
+    body += line(e.str(R.string.ui_btn_reset), UiRole.FG, UiAction.Do(Cmd.ASK, ConfirmKind.RESET.name))
+    if (confirm?.kind == ConfirmKind.RESET) body += confirmLine(e, e.str(R.string.ui_ask_reset))
     body += line(e.str(R.string.ui_btn_repo), UiRole.LINK, UiAction.Open(REPO_URL))
     body += line(e.str(R.string.ui_btn_uninstall), UiRole.RED, UiAction.Uninstall)
     val back = if (e.config.repo == null) go(WidgetView.BRANCHES) else go(WidgetView.REPOS)
     return UiScreen(body, subFoot(e.str(R.string.ui_t_settings), back, go(WidgetView.BRANCHES), e.cpl))
 }
 
+/** `Delete token …1c05?` with `[Yes]` and `[No]`, shown under the item after the first tap. */
+private fun confirmLine(e: UiEnv, question: String): List<UiLine> = wrapItems(
+    listOf(
+        span(question, UiRole.RED),
+        span(e.str(R.string.ui_btn_yes), UiRole.RED, UiAction.Do(Cmd.CONFIRM)),
+        span(e.str(R.string.ui_btn_no), UiRole.FG, UiAction.Do(Cmd.CANCEL)),
+    ),
+    e.cpl,
+)
+
 private fun subFootOf(e: UiEnv, titleRes: Int) =
     subFoot(e.str(titleRes), go(WidgetView.SETTINGS), go(WidgetView.BRANCHES), e.cpl)
 
 private fun shownScreen(e: UiEnv): UiScreen {
     val body = mutableListOf(line(e.str(R.string.ui_h_shown), UiRole.DIM), rule())
-    e.display.columns.forEach { c -> body += toggle(c.enabled, columnName(e, c.id), UiAction.Do("coltoggle", c.id.name)) }
+    e.display.columns.forEach { c -> body += toggle(c.enabled, columnName(e, c.id), UiAction.Do(Cmd.COL_TOGGLE, c.id.name)) }
     return UiScreen(body, subFootOf(e, R.string.ui_t_columns))
 }
 
-private fun upDown(e: UiEnv, kind: String): List<UiLine> = wrapItems(
-    listOf(span(e.str(R.string.ui_btn_up), UiRole.FG, UiAction.Do(kind, "-1")), span(e.str(R.string.ui_btn_down), UiRole.FG, UiAction.Do(kind, "1"))),
+private fun upDown(e: UiEnv, cmd: Cmd): List<UiLine> = wrapItems(
+    listOf(span(e.str(R.string.ui_btn_up), UiRole.FG, UiAction.Do(cmd, "-1")), span(e.str(R.string.ui_btn_down), UiRole.FG, UiAction.Do(cmd, "1"))),
     e.cpl,
 )
 
 private fun orderScreen(e: UiEnv): UiScreen {
     val sel = selectedColumn(e.config)
     val body = mutableListOf(line(e.str(R.string.ui_h_select), UiRole.DIM))
-    body += upDown(e, "colmove")
+    body += upDown(e, Cmd.COL_MOVE)
     body += rule()
     e.display.columns.filter { it.enabled }.forEachIndexed { i, c ->
         val on = c.id == sel
-        body += line((if (on) "> " else "  ") + "${i + 1} " + columnName(e, c.id), if (on) UiRole.PROMPT else UiRole.FG, UiAction.Do("colsel", c.id.name))
+        body += line((if (on) "> " else "  ") + "${i + 1} " + columnName(e, c.id), if (on) UiRole.PROMPT else UiRole.FG, UiAction.Do(Cmd.COL_SELECT, c.id.name))
     }
     return UiScreen(body, subFootOf(e, R.string.ui_t_order))
 }
@@ -278,14 +317,14 @@ private fun widthScreen(e: UiEnv): UiScreen {
         val name = columnName(e, c.id)
         val cap = c.maxChars
         val controls = if (cap == null) {
-            listOf(span(e.str(R.string.ui_auto), UiRole.FG, UiAction.Do("colcap", c.id.name, "1")))
+            listOf(span(e.str(R.string.ui_auto), UiRole.FG, UiAction.Do(Cmd.COL_CAP, c.id.name, "1")))
         } else {
             listOf(
-                span("[−]", UiRole.FG, UiAction.Do("colcap", c.id.name, "-1")),
+                span("[−]", UiRole.FG, UiAction.Do(Cmd.COL_CAP, c.id.name, "-1")),
                 span(" "),
-                span(cap.toString(), UiRole.FG, UiAction.Do("colcap", c.id.name, "0")),
+                span(cap.toString(), UiRole.FG, UiAction.Do(Cmd.COL_CAP, c.id.name, "0")),
                 span(" "),
-                span("[+]", UiRole.FG, UiAction.Do("colcap", c.id.name, "1")),
+                span("[+]", UiRole.FG, UiAction.Do(Cmd.COL_CAP, c.id.name, "1")),
             )
         }
         val controlsWidth = controls.sumOf { displayWidth(it.text) }
@@ -302,11 +341,11 @@ private fun widthScreen(e: UiEnv): UiScreen {
 private fun priorityScreen(e: UiEnv): UiScreen {
     val sel = selectedColumn(e.config)
     val body = mutableListOf(line(e.str(R.string.ui_h_select), UiRole.DIM))
-    body += upDown(e, "priomove")
+    body += upDown(e, Cmd.PRIO_MOVE)
     body += rule()
     e.display.priorityRanking().forEachIndexed { i, c ->
         val on = c.id == sel
-        body += line((if (on) "> " else "  ") + "${i + 1} " + columnName(e, c.id), if (on) UiRole.PROMPT else UiRole.FG, UiAction.Do("colsel", c.id.name))
+        body += line((if (on) "> " else "  ") + "${i + 1} " + columnName(e, c.id), if (on) UiRole.PROMPT else UiRole.FG, UiAction.Do(Cmd.COL_SELECT, c.id.name))
     }
     body += rule()
     body += line(e.str(R.string.ui_h_prio_note), UiRole.DIM)
@@ -318,16 +357,21 @@ private fun displayScreen(e: UiEnv): UiScreen {
     val body = mutableListOf<UiLine>()
     body += wrapItems(
         listOf(
-            span("[−]", UiRole.FG, UiAction.Do("font", "-1")),
-            span("[+]", UiRole.FG, UiAction.Do("font", "1")),
+            span("[−]", UiRole.FG, UiAction.Do(Cmd.FONT, "-1")),
+            span("[+]", UiRole.FG, UiAction.Do(Cmd.FONT, "1")),
             span(e.str(R.string.ui_font, d.fontSizeSp)),
         ),
         e.cpl,
     )
     body += rule()
+    body += line(e.str(R.string.ui_theme), UiRole.DIM)
+    body += radio(d.theme == Theme.DARK, e.str(R.string.ui_theme_dark), UiAction.Do(Cmd.THEME, Theme.DARK.name))
+    body += radio(d.theme == Theme.LIGHT, e.str(R.string.ui_theme_light), UiAction.Do(Cmd.THEME, Theme.LIGHT.name))
+    body += radio(d.theme == Theme.SYSTEM, e.str(R.string.ui_theme_system), UiAction.Do(Cmd.THEME, Theme.SYSTEM.name))
+    body += rule()
     body += line(e.str(R.string.ui_sym), UiRole.DIM)
-    body += radio(d.glyphStyle == GlyphStyle.UNICODE, "✓ ✗ ● ○", UiAction.Do("glyph", GlyphStyle.UNICODE.name))
-    body += radio(d.glyphStyle == GlyphStyle.BRACKET, "[O] [F] [R] [-]", UiAction.Do("glyph", GlyphStyle.BRACKET.name))
+    body += radio(d.glyphStyle == GlyphStyle.UNICODE, "✓ ✗ ● ○", UiAction.Do(Cmd.GLYPH, GlyphStyle.UNICODE.name))
+    body += radio(d.glyphStyle == GlyphStyle.BRACKET, "[O] [F] [R] [-]", UiAction.Do(Cmd.GLYPH, GlyphStyle.BRACKET.name))
     body += rule()
     listOf(
         Status.GREEN to R.string.ui_st_ok,
@@ -344,7 +388,7 @@ private fun pinnedScreen(e: UiEnv): UiScreen {
     val d = e.display
     val names = (d.pinned + e.snapshot?.branches.orEmpty().map { it.branch }).distinct()
     val body = mutableListOf(line(e.str(R.string.ui_h_pinned), UiRole.DIM), rule())
-    names.forEach { n -> body += toggle(n in d.pinned, n, UiAction.Do("pin", n)) }
+    names.forEach { n -> body += toggle(n in d.pinned, n, UiAction.Do(Cmd.PIN, n)) }
     return UiScreen(body, subFootOf(e, R.string.ui_t_pinned))
 }
 
@@ -352,15 +396,57 @@ private fun tinyScreen(e: UiEnv): UiScreen {
     val d = e.display
     val body = mutableListOf<UiLine>()
     body += line(e.str(R.string.ui_shows), UiRole.DIM)
-    body += radio(d.tinySource == TinySource.PINNED, e.str(R.string.ui_src_pinned), UiAction.Do("tinysrc", TinySource.PINNED.name))
-    body += radio(d.tinySource == TinySource.LAST, e.str(R.string.ui_src_last), UiAction.Do("tinysrc", TinySource.LAST.name))
-    body += radio(d.tinySource == TinySource.WORST, e.str(R.string.ui_src_worst), UiAction.Do("tinysrc", TinySource.WORST.name))
+    body += radio(d.tinySource == TinySource.PINNED, e.str(R.string.ui_src_pinned), UiAction.Do(Cmd.TINY_SOURCE, TinySource.PINNED.name))
+    body += radio(d.tinySource == TinySource.LAST, e.str(R.string.ui_src_last), UiAction.Do(Cmd.TINY_SOURCE, TinySource.LAST.name))
+    body += radio(d.tinySource == TinySource.WORST, e.str(R.string.ui_src_worst), UiAction.Do(Cmd.TINY_SOURCE, TinySource.WORST.name))
     body += rule()
     body += line(e.str(R.string.ui_tap), UiRole.DIM)
-    body += radio(d.tinyTap == TinyTap.RUN, e.str(R.string.ui_tap_run), UiAction.Do("tinytap", TinyTap.RUN.name))
-    body += radio(d.tinyTap == TinyTap.REFRESH, e.str(R.string.ui_tap_refresh), UiAction.Do("tinytap", TinyTap.REFRESH.name))
-    body += radio(d.tinyTap == TinyTap.COPY, e.str(R.string.ui_tap_copy), UiAction.Do("tinytap", TinyTap.COPY.name))
+    body += radio(d.tinyTap == TinyTap.RUN, e.str(R.string.ui_tap_run), UiAction.Do(Cmd.TINY_TAP, TinyTap.RUN.name))
+    body += radio(d.tinyTap == TinyTap.REFRESH, e.str(R.string.ui_tap_refresh), UiAction.Do(Cmd.TINY_TAP, TinyTap.REFRESH.name))
+    body += radio(d.tinyTap == TinyTap.COPY, e.str(R.string.ui_tap_copy), UiAction.Do(Cmd.TINY_TAP, TinyTap.COPY.name))
     body += rule()
     body += line(e.str(R.string.ui_h_tiny_note), UiRole.DIM)
     return UiScreen(body, subFootOf(e, R.string.ui_t_tiny))
+}
+
+/** `label          [−] value [+]`; the controls go below the label when the line is too short. */
+private fun stepper(e: UiEnv, label: String, value: String, cmd: Cmd): List<UiLine> {
+    val controls = listOf(
+        span("[−]", UiRole.FG, UiAction.Do(cmd, "-1")),
+        span(" $value ", UiRole.PROMPT),
+        span("[+]", UiRole.FG, UiAction.Do(cmd, "1")),
+    )
+    val width = controls.sumOf { displayWidth(it.text) }
+    return if (displayWidth(label) + 1 + width <= e.cpl) {
+        listOf(UiLine(listOf(span(label)), controls))
+    } else {
+        listOf(line(label), UiLine(emptyList(), controls))
+    }
+}
+
+private fun filtersScreen(e: UiEnv): UiScreen {
+    val d = e.display
+    val body = mutableListOf<UiLine>()
+    body += line(e.str(R.string.ui_sort), UiRole.DIM)
+    body += radio(d.sortKey == SortKey.RECENT, e.str(R.string.ui_sort_recent), UiAction.Do(Cmd.SORT, SortKey.RECENT.name))
+    body += radio(d.sortKey == SortKey.STATUS, e.str(R.string.ui_sort_status), UiAction.Do(Cmd.SORT, SortKey.STATUS.name))
+    body += radio(d.sortKey == SortKey.NAME, e.str(R.string.ui_sort_name), UiAction.Do(Cmd.SORT, SortKey.NAME.name))
+    body += rule()
+    body += stepper(e, e.str(R.string.ui_idle), d.hideIdleDays?.let { e.str(R.string.ui_days, it) } ?: e.str(R.string.ui_never), Cmd.IDLE_DAYS)
+    body += stepper(e, e.str(R.string.ui_rows), d.maxRows?.toString() ?: e.str(R.string.ui_all), Cmd.MAX_ROWS)
+    body += toggle(d.hideBranchesWithoutRuns, e.str(R.string.ui_hide_no_runs), UiAction.Do(Cmd.HIDE_NO_RUNS))
+    return UiScreen(body, subFootOf(e, R.string.ui_t_filters))
+}
+
+private fun refreshScreen(e: UiEnv): UiScreen {
+    val a = e.app
+    val body = mutableListOf<UiLine>()
+    body += stepper(e, e.str(R.string.ui_every), a.refreshMinutes?.let { e.str(R.string.ui_minutes, it) } ?: e.str(R.string.ui_off), Cmd.REFRESH_INTERVAL)
+    body += toggle(a.unmeteredOnly, e.str(R.string.ui_wifi_only), UiAction.Do(Cmd.REFRESH_UNMETERED))
+    body += toggle(a.batteryNotLow, e.str(R.string.ui_battery), UiAction.Do(Cmd.REFRESH_BATTERY))
+    body += rule()
+    body += stepper(e, e.str(R.string.ui_expiry_warn), e.str(R.string.ui_days, a.expiryWarnDays), Cmd.EXPIRY_WARN)
+    body += rule()
+    body += line(e.str(R.string.ui_h_refresh), UiRole.DIM)
+    return UiScreen(body, subFootOf(e, R.string.ui_t_refresh))
 }

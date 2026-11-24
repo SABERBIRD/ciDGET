@@ -115,7 +115,11 @@ class RepoListRepository(
             for (id in okIds) {
                 when (val r = listFor(id)) {
                     is ApiResult.Ok -> fresh[id] = r.value.map { CachedRepo(it.fullName, it.isPrivate, it.archived, id) }
-                    is ApiResult.Err -> if (firstError == null) firstError = r.error
+                    is ApiResult.Err -> {
+                        if (firstError == null) firstError = r.error
+                        // Shown as `! 401 token` on that token in the settings; the other tokens keep working.
+                        if (r.error == ApiError.TokenInvalid) runCatching { tokens.markInvalid(id) }
+                    }
                 }
             }
         } finally {

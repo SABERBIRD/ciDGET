@@ -7,6 +7,7 @@ import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
@@ -17,8 +18,9 @@ class TokenStoreTest {
     private class FakeKeys : TokenKeyProvider {
         var key: SecretKey? = null
         var deletes = 0
-        override fun getOrCreate(): SecretKey =
-            key ?: KeyGenerator.getInstance("AES").apply { init(256) }.generateKey().also { key = it }
+        var failing: Exception? = null
+        override fun getOrCreate(): SecretKey = failing?.let { throw it }
+            ?: key ?: KeyGenerator.getInstance("AES").apply { init(256) }.generateKey().also { key = it }
         override fun delete() { key = null; deletes++ }
     }
 
@@ -152,5 +154,35 @@ class TokenStoreTest {
         assertNull(keys.key)
         assertTrue(store.summaries.value.isEmpty())
         assertNotNull(dir)
+    }
+
+    @Test fun passingKeystoreFailureKeepsTheTokens() {
+        val id = TokenStore(file, keys).add(fake, "", null)
+        val size = file.length()
+        keys.failing = java.security.ProviderException("keystore busy")
+        val store = TokenStore(file, keys)
+        assertFailsWith<TokenStoreUnavailableException> { store.usableToken(id) }
+        assertTrue(file.exists())
+        assertEquals(size, file.length())
+        assertEquals(0, keys.deletes)
+        keys.failing = null
+        assertEquals(fake, store.usableToken(id))
+    }
+
+    @Test fun unreadableKeystoreAtStartLeavesNoSummariesButKeepsTheFile() {
+        TokenStore(file, keys).add(fake, "", null)
+        File(dir, "token.bin.meta").delete()
+        keys.failing = java.security.KeyStoreException("not ready")
+        val store = TokenStore(file, keys)
+        assertTrue(store.summaries.value.isEmpty())
+        assertTrue(file.exists())
+    }
+
+    @Test fun tagFailureStillWipes() {
+        TokenStore(file, keys).add(fake, "", null)
+        keys.key = KeyGenerator.getInstance("AES").apply { init(256) }.generateKey()
+        val store = TokenStore(file, keys)
+        assertNull(store.usableToken(null))
+        assertFalse(file.exists())
     }
 }

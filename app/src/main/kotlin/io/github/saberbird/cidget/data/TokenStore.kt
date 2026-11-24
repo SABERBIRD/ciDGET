@@ -8,7 +8,13 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonObject
 import java.io.File
+import java.io.IOException
+import java.security.InvalidAlgorithmParameterException
+import java.security.InvalidKeyException
+import java.security.UnrecoverableKeyException
 import java.util.UUID
+import javax.crypto.BadPaddingException
+import javax.crypto.IllegalBlockSizeException
 
 /** Whether a saved token may be used. `INVALID` after a 401, until the token is replaced. */
 @Serializable
@@ -38,13 +44,22 @@ private data class SummaryCache(val items: List<TokenSummaryDto> = emptyList())
 @Serializable
 private data class TokenSummaryDto(val id: String, val label: String, val last4: String, val expiresAt: Instant?, val state: TokenState)
 
+/**
+ * The token file could not be read for a reason that may pass (Keystore busy or not ready, I/O error). Nothing
+ * was deleted. It is an [IOException], so a request that needed the token fails like a network error and is
+ * retried. Carries no data.
+ */
+class TokenStoreUnavailableException : IOException("token store unavailable")
+
 /** What the UI may know about a token: never the token itself, only its last 4 characters. */
 data class TokenSummary(val id: String, val label: String, val last4: String, val expiresAt: Instant?, val state: TokenState)
 
 /**
  * The encrypted token file (SECURITY.md) holding one or more tokens. The plaintext exists only inside the
  * methods below and in the caller's local variable; nothing here logs it or puts it in an exception. If the
- * file cannot be decrypted, the file and the key are deleted and the state becomes "no tokens".
+ * file can never be decrypted again (bad tag, lost or invalidated key, corrupt data), the file and the key are
+ * deleted and the state becomes "no tokens" (SECURITY.md). Any other failure is treated as passing: nothing is
+ * deleted and [TokenStoreUnavailableException] is thrown.
  */
 class TokenStore(
     private val file: File,
@@ -63,7 +78,15 @@ class TokenStore(
         // Fast path: the non-secret summaries come from a plain file, so a cold start (a widget being added)
         // does not wait for the Keystore. The encrypted file is only opened when a token is really needed.
         val cached = readMeta()
-        if (cached != null && cached.isNotEmpty() && file.exists()) _summaries.value = cached else publish(read())
+        if (cached != null && cached.isNotEmpty() && file.exists()) {
+            _summaries.value = cached
+        } else {
+            // A passing Keystore failure leaves the summaries empty for now; the next read tries again.
+            try {
+                publish(read())
+            } catch (_: TokenStoreUnavailableException) {
+            }
+        }
     }
 
     /** True when at least one token is saved, whatever its state. */
@@ -149,8 +172,14 @@ class TokenStore(
 
     private fun read(): TokenPayload {
         if (!file.exists()) return TokenPayload()
+        val text = try {
+            TokenCodec.decrypt(keys.getOrCreate(), file.readBytes()).toString(Charsets.UTF_8)
+        } catch (e: Exception) {
+            if (isPermanent(e)) return wipeAndEmpty()
+            // Keystore busy, provider error, I/O: keep everything and let the caller retry. Never include the cause.
+            throw TokenStoreUnavailableException()
+        }
         return try {
-            val text = TokenCodec.decrypt(keys.getOrCreate(), file.readBytes()).toString(Charsets.UTF_8)
             val obj: JsonObject = json.parseToJsonElement(text).jsonObject
             if ("tokens" in obj) {
                 json.decodeFromString(TokenPayload.serializer(), text)
@@ -160,12 +189,24 @@ class TokenStore(
                 TokenPayload(listOf(SavedToken(UUID.randomUUID().toString(), "", legacy.token, legacy.state, legacy.expiresAt)))
                     .also { runCatching { write(it) } }
             }
-        } catch (_: Exception) {
-            // Corrupt file, lost key or bad tag: start clean. Never include the cause; it may hold data.
-            wipe()
-            publish(TokenPayload())
-            TokenPayload()
+        } catch (_: IllegalArgumentException) {
+            // Decrypted but not our JSON (SerializationException is an IllegalArgumentException): corrupt for good.
+            wipeAndEmpty()
         }
+    }
+
+    /** Failures after which the file can never be decrypted: bad tag or data, a lost or invalidated key. */
+    private fun isPermanent(e: Exception): Boolean = e is BadPaddingException || // includes AEADBadTagException
+        e is InvalidKeyException || // includes KeyPermanentlyInvalidatedException
+        e is UnrecoverableKeyException ||
+        e is IllegalBlockSizeException ||
+        e is InvalidAlgorithmParameterException ||
+        e is IllegalArgumentException // bad header or IV length from TokenCodec
+
+    private fun wipeAndEmpty(): TokenPayload {
+        wipe()
+        publish(TokenPayload())
+        return TokenPayload()
     }
 
     private fun readMeta(): List<TokenSummary>? = runCatching {

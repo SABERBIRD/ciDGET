@@ -3,10 +3,51 @@ package io.github.saberbird.cidget.widget.ui
 /** Colour role of a span; each renderer maps roles to palette colours. */
 internal enum class UiRole { FG, DIM, PROMPT, GREEN, RED, YELLOW, GREY, LINK }
 
+/** The changes a tap can ask [UiController] for. Stored by name in the widget's tap intents. */
+internal enum class Cmd {
+    /** Show screen `arg` (a [io.github.saberbird.cidget.core.WidgetView] name). */
+    VIEW,
+
+    /** Refresh the repo list and every repo some widget shows. */
+    REFRESH,
+
+    /** Switch to repo `arg` seen by token `arg2`. */
+    PICK,
+
+    /** Ask for a second tap before a destructive action: `arg` is a [io.github.saberbird.cidget.core.ConfirmKind] name, `arg2` its target. */
+    ASK,
+
+    /** Run the pending confirmed action. */
+    CONFIRM,
+
+    /** Drop the pending confirmation. */
+    CANCEL,
+    COL_TOGGLE,
+    COL_SELECT,
+    COL_MOVE,
+    PRIO_MOVE,
+    COL_CAP,
+    FONT,
+    GLYPH,
+    TINY_SOURCE,
+    TINY_TAP,
+    PIN,
+    LANG,
+    THEME,
+    SORT,
+    IDLE_DAYS,
+    MAX_ROWS,
+    HIDE_NO_RUNS,
+    REFRESH_INTERVAL,
+    REFRESH_UNMETERED,
+    REFRESH_BATTERY,
+    EXPIRY_WARN,
+}
+
 /** What a tap on a span or line does. */
 internal sealed interface UiAction {
-    /** A change handled in the app process by [UiController] (`kind` names it; see there). */
-    data class Do(val kind: String, val arg: String = "", val arg2: String = "") : UiAction
+    /** A change handled in the app process by [UiController]; [arg] and [arg2] depend on [cmd]. */
+    data class Do(val cmd: Cmd, val arg: String = "", val arg2: String = "") : UiAction
 
     /** Opens [url] in the browser. */
     data class Open(val url: String) : UiAction

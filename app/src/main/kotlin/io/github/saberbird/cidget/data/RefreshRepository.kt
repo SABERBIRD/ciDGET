@@ -21,7 +21,7 @@ enum class RefreshOutcome { SUCCESS, RETRY }
  * One refresh of one repo (ARCHITECTURE.md §2–§3): skips while rate limited or while the token is invalid,
  * flags `refreshing` around the call, keeps the old data on errors and records the error.
  *
- * @param onChanged called after every snapshot change so widgets redraw.
+ * @param onChanged called with the repo after its snapshot changed, so the widgets showing it redraw.
  */
 class RefreshRepository(
     private val tokens: TokenStore,
@@ -30,7 +30,7 @@ class RefreshRepository(
     /** Id of the token a repo uses (from the widget that shows it), or null for the default. */
     private val tokenIdFor: suspend (String) -> String?,
     private val clock: Clock,
-    private val onChanged: suspend () -> Unit,
+    private val onChanged: suspend (repo: String) -> Unit,
 ) {
     /** True if [repo] may be refreshed now: a usable token exists and no rate-limit wait is running. */
     private suspend fun canRefresh(repo: String): Boolean {
@@ -47,26 +47,37 @@ class RefreshRepository(
     suspend fun prepare(repo: String): Boolean {
         if (!canRefresh(repo)) return false
         snapshots.update(repo) { it.copy(refreshing = true) }
-        onChanged()
+        onChanged(repo)
         return true
     }
 
     suspend fun refresh(repo: String): RefreshOutcome {
-        if (!canRefresh(repo)) return RefreshOutcome.SUCCESS
+        if (!canRefresh(repo)) {
+            // A manual refresh may have shown `[...]` before the token became invalid or a rate limit began.
+            if (snapshots.get(repo)?.refreshing == true) {
+                snapshots.update(repo) { it.copy(refreshing = false) }
+                onChanged(repo)
+            }
+            return RefreshOutcome.SUCCESS
+        }
         val owner = repo.substringBefore('/')
         val name = repo.substringAfter('/')
         val before = snapshots.get(repo)
         val start = clock.now()
         val tokenId = tokens.resolveId(tokenIdFor(repo))
 
-        snapshots.update(repo) { it.copy(refreshing = true) }
-        onChanged()
+        if (before?.refreshing != true) {
+            // A manual refresh already shows `[...]` (prepare); only background refreshes set it here.
+            snapshots.update(repo) { it.copy(refreshing = true) }
+            onChanged(repo)
+        }
         try {
             val skipBranches = before != null && before.branchesForbidden &&
                 before.branchesForbiddenCheckedAt?.let { start - it < RECHECK_FORBIDDEN } == true
             val result = fetcher.fetch(tokenId, owner, name, FetchSettings(branchesForbidden = skipBranches))
             val now = clock.now()
-            result.meta.tokenExpiresAt?.let { tokens.updateExpiry(tokenId, it) }
+            // The token file may be briefly unreadable (Keystore busy); that must not fail the refresh.
+            result.meta.tokenExpiresAt?.let { runCatching { tokens.updateExpiry(tokenId, it) } }
             val limit = result.meta.rateLimit
             val reset = limit?.resetAt
             val metaLimited = if (limit?.remaining == 0 && reset != null && reset > now) reset else null
@@ -93,7 +104,7 @@ class RefreshRepository(
                 }
                 is ApiResult.Err -> {
                     val e = result.error
-                    if (e == ApiError.TokenInvalid) tokens.markInvalid(tokenId)
+                    if (e == ApiError.TokenInvalid) runCatching { tokens.markInvalid(tokenId) }
                     snapshots.update(repo) {
                         it.copy(
                             error = e,
@@ -107,7 +118,7 @@ class RefreshRepository(
         } finally {
             withContext(NonCancellable) {
                 snapshots.update(repo) { it.copy(refreshing = false) }
-                onChanged()
+                onChanged(repo)
             }
         }
     }

@@ -6,7 +6,9 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import io.github.saberbird.cidget.core.AppSettings
 import io.github.saberbird.cidget.core.WidgetConfig
+import androidx.datastore.preferences.core.intPreferencesKey
 import io.github.saberbird.cidget.core.WidgetView
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -17,6 +19,9 @@ import kotlinx.serialization.json.Json
 private val Context.settingsStore: DataStore<Preferences> by preferencesDataStore(name = "settings")
 
 private const val WIDGET_PREFIX = "widget_config_"
+private val APP_KEY = stringPreferencesKey("app_settings")
+private val SCHEMA_KEY = intPreferencesKey("schema")
+private const val SCHEMA = 2
 
 /**
  * App settings in the single DataStore `settings`: one [WidgetConfig] JSON per `appWidgetId`, holding the
@@ -27,12 +32,37 @@ class SettingsRepository(private val store: DataStore<Preferences>) {
 
     private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
 
+    /** App-wide settings (background refresh, expiry warning). */
+    val appSettings: Flow<AppSettings> = store.data.map { decodeApp(it[APP_KEY]) }.distinctUntilChanged()
+
+    suspend fun getAppSettings(): AppSettings = appSettings.first()
+
+    /** Reads, transforms and stores the app-wide settings atomically; returns the new value. */
+    suspend fun updateAppSettings(transform: (AppSettings) -> AppSettings): AppSettings {
+        var next = AppSettings()
+        store.edit { prefs ->
+            next = transform(decodeApp(prefs[APP_KEY])).normalized()
+            prefs[APP_KEY] = json.encodeToString(AppSettings.serializer(), next)
+        }
+        return next
+    }
+
+    private fun decodeApp(s: String?): AppSettings =
+        (s?.let { runCatching { json.decodeFromString(AppSettings.serializer(), it) }.getOrNull() } ?: AppSettings()).normalized()
+
     /**
-     * Emits whenever any stored setting changes (the widget configs). The app
-     * uses it to redraw widgets, because a Glance session that has gone idle does not follow flows by itself.
+     * Removes keys of older versions (the global defaults and flags replaced by D28; they are not migrated). Runs
+     * once: a schema number is stored afterwards.
      */
-    fun changes(): Flow<Map<String, Any>> =
-        store.data.map { p -> p.asMap().mapKeys { it.key.name } }.distinctUntilChanged()
+    suspend fun dropLegacyKeys() {
+        store.edit { prefs ->
+            if ((prefs[SCHEMA_KEY] ?: 0) >= SCHEMA) return@edit
+            prefs.asMap().keys
+                .filter { !it.name.startsWith(WIDGET_PREFIX) && it.name != APP_KEY.name }
+                .forEach { prefs.remove(it) }
+            prefs[SCHEMA_KEY] = SCHEMA
+        }
+    }
 
     private fun key(appWidgetId: Int) = stringPreferencesKey(WIDGET_PREFIX + appWidgetId)
 
@@ -61,10 +91,14 @@ class SettingsRepository(private val store: DataStore<Preferences>) {
     suspend fun getWidgetRepo(appWidgetId: Int): String? = getWidgetConfig(appWidgetId).repo
 
     suspend fun setWidgetRepo(appWidgetId: Int, repo: String, tokenId: String? = null) =
-        updateWidget(appWidgetId) { it.copy(repo = repo, tokenId = tokenId, view = WidgetView.BRANCHES) }
+        updateWidget(appWidgetId) { it.copy(repo = repo, tokenId = tokenId, view = WidgetView.BRANCHES, confirm = null) }
 
-    /** Token id for [repo] taken from the first widget that shows it, or null (use the default token). */
-    suspend fun tokenIdForRepo(repo: String): String? = allWidgets().values.firstOrNull { it.repo == repo }?.tokenId
+    /**
+     * Token id for [repo]: from the widget with the lowest id that shows it (so the choice is stable when two
+     * widgets show the same repo), or null (use the default token).
+     */
+    suspend fun tokenIdForRepo(repo: String): String? =
+        allWidgets().entries.filter { it.value.repo == repo }.minByOrNull { it.key }?.value?.tokenId
 
     /** Forgets a widget's settings (called when the widget is removed). */
     suspend fun deleteWidget(appWidgetId: Int) {

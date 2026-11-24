@@ -22,6 +22,7 @@ import androidx.glance.text.FontFamily
 import androidx.glance.text.Text
 import androidx.glance.text.TextStyle
 import androidx.glance.unit.ColorProvider
+import io.github.saberbird.cidget.core.AppSettings
 import io.github.saberbird.cidget.core.BranchStatus
 import io.github.saberbird.cidget.core.Status
 import io.github.saberbird.cidget.core.TinyTap
@@ -34,11 +35,12 @@ import io.github.saberbird.cidget.data.RepoList
 import io.github.saberbird.cidget.data.RepoSnapshot
 import io.github.saberbird.cidget.data.TokenState
 import io.github.saberbird.cidget.data.TokenSummary
+import io.github.saberbird.cidget.widget.ui.GlanceColors
 import io.github.saberbird.cidget.widget.ui.GlanceScreen
+import io.github.saberbird.cidget.widget.ui.Cmd
 import io.github.saberbird.cidget.widget.ui.UiAction
 import io.github.saberbird.cidget.widget.ui.UiEnv
 import io.github.saberbird.cidget.widget.ui.buildScreen
-import io.github.saberbird.cidget.widget.ui.color
 import io.github.saberbird.cidget.widget.ui.toGlance
 import io.github.saberbird.cidget.widget.ui.UiRole
 import kotlinx.datetime.Instant
@@ -49,7 +51,9 @@ private const val LINE_HEIGHT_FACTOR = 1.5f
 /** Narrower than this (dp) a widget is one cell wide: the 1×1 tile or the narrow column (D28). */
 private const val ONE_CELL_DP = 110f
 
-private fun style(color: Color, sizeSp: Int) = TextStyle(color = ColorProvider(color), fontFamily = FontFamily.Monospace, fontSize = sizeSp.sp)
+private fun style(color: Color, sizeSp: Int) = style(ColorProvider(color), sizeSp)
+
+private fun style(color: ColorProvider, sizeSp: Int) = TextStyle(color = color, fontFamily = FontFamily.Monospace, fontSize = sizeSp.sp)
 
 private fun statusRole(s: Status): UiRole = when (s) {
     Status.RED -> UiRole.RED
@@ -79,6 +83,7 @@ internal fun WidgetContent(
     snapshot: RepoSnapshot?,
     now: Instant,
     glyphs: Glyphs,
+    app: AppSettings,
 ) {
     val base = LocalContext.current
     val display = config.display
@@ -89,14 +94,15 @@ internal fun WidgetContent(
     val lineHeightDp = sp * fontScale * LINE_HEIGHT_FACTOR
     val w = size.width.value
     val h = size.height.value
+    val colors = remember(display.theme) { GlanceColors(display.theme) }
     when {
-        w < ONE_CELL_DP && h >= ONE_CELL_DP -> ColumnContent(appWidgetId, config, snapshot, now, glyphs, tokenState)
+        w < ONE_CELL_DP && h >= ONE_CELL_DP -> ColumnContent(appWidgetId, config, snapshot, now, glyphs, tokenState, colors)
         w < ONE_CELL_DP || h < 2 * lineHeightDp + 2 * PADDING_DP -> TinyContent(appWidgetId, config, snapshot, tokenState, now, glyphs, w, h)
         else -> {
             // One character of safety margin: some launchers report sizes a few dp off (RESEARCH.md R2).
             val cpl = (charsPerLine(w, 2f * PADDING_DP, sp.toFloat(), fontScale, Glyphs.advanceRatio) - 1).coerceAtLeast(0)
-            val env = UiEnv(ctx, appWidgetId, config, tokens, tokenState, repoList, snapshot, now, glyphs, cpl)
-            GlanceScreen(buildScreen(env), appWidgetId, sp)
+            val env = UiEnv(ctx, appWidgetId, config, tokens, tokenState, repoList, snapshot, now, glyphs, cpl, app)
+            GlanceScreen(buildScreen(env), appWidgetId, sp, colors)
         }
     }
 }
@@ -129,7 +135,7 @@ private fun TinyContent(
     } else {
         when (config.display.tinyTap) {
             TinyTap.RUN -> UiAction.Open(rowUrl(repo, target))
-            TinyTap.REFRESH -> UiAction.Do("refresh")
+            TinyTap.REFRESH -> UiAction.Do(Cmd.REFRESH)
             TinyTap.COPY -> UiAction.Copy(target.branch, rowUrl(repo, target))
         }
     }
@@ -162,14 +168,15 @@ private fun ColumnContent(
     now: Instant,
     glyphs: Glyphs,
     tokenState: TokenState?,
+    colors: GlanceColors,
 ) {
     val context = LocalContext.current
     val display = config.display
     val sp = display.fontSizeSp
     val repo = config.repo
     val rows = if (repo != null && tokenState != null) selectBranches(snapshot?.branches.orEmpty(), display.viewOptions(), now).rows else emptyList()
-    Column(GlanceModifier.fillMaxSize().background(Palette.bg).padding(6.dp)) {
-        Text("~$", style = style(Palette.prompt, sp + 2), modifier = GlanceModifier.clickable(UiAction.OpenWide.toGlance(context, appWidgetId)).padding(bottom = 2.dp))
+    Column(GlanceModifier.fillMaxSize().background(colors.bg).padding(6.dp)) {
+        Text("~$", style = style(colors.of(UiRole.PROMPT), sp + 2), modifier = GlanceModifier.clickable(UiAction.OpenWide.toGlance(context, appWidgetId)).padding(bottom = 2.dp))
         if (repo != null) {
             LazyColumn(GlanceModifier.fillMaxWidth()) {
                 items(rows.indices.toList()) { i ->
@@ -177,11 +184,11 @@ private fun ColumnContent(
                     val url = rowUrl(repo, b)
                     val open = UiAction.Open(url).toGlance(context, appWidgetId)
                     Column(GlanceModifier.fillMaxWidth().padding(top = 6.dp)) {
-                        Text(glyphs.statusLabel(b.status, display.glyphStyle), style = style(statusRole(b.status).color(), sp), modifier = GlanceModifier.clickable(open))
-                        Text(b.representative?.let { "#${it.runNumber}" } ?: "—", style = style(Palette.dim, sp), modifier = GlanceModifier.clickable(open))
+                        Text(glyphs.statusLabel(b.status, display.glyphStyle), style = style(colors.of(statusRole(b.status)), sp), modifier = GlanceModifier.clickable(open))
+                        Text(b.representative?.let { "#${it.runNumber}" } ?: "—", style = style(colors.of(UiRole.DIM), sp), modifier = GlanceModifier.clickable(open))
                         Text(
                             "[${glyphs.copy}]",
-                            style = style(Palette.dim, sp),
+                            style = style(colors.of(UiRole.DIM), sp),
                             modifier = GlanceModifier.clickable(UiAction.Copy(b.branch, url).toGlance(context, appWidgetId)),
                         )
                     }

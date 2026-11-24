@@ -32,8 +32,13 @@ class CidgetWidgetReceiver : GlanceAppWidgetReceiver() {
         super.onDeleted(context, appWidgetIds)
         background {
             val graph = context.graph
+            val before = graph.settings.reposInUse()
             appWidgetIds.forEach { graph.settings.deleteWidget(it) }
-            graph.snapshots.deleteExcept(graph.settings.reposInUse())
+            val inUse = graph.settings.reposInUse()
+            // Repos no widget shows any more: drop their queued refresh and their cached data.
+            (before - inUse).forEach { RefreshScheduler.cancel(context, it) }
+            graph.snapshots.deleteExcept(inUse)
+            graph.schedulePeriodic()
         }
     }
 

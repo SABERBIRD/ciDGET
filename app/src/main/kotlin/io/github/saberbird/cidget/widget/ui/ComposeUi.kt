@@ -10,6 +10,7 @@ import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -37,6 +38,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.github.saberbird.cidget.R
+import io.github.saberbird.cidget.core.AppSettings
 import io.github.saberbird.cidget.core.WidgetConfig
 import io.github.saberbird.cidget.core.WidgetView
 import io.github.saberbird.cidget.core.charsPerLine
@@ -60,26 +62,33 @@ private const val WIDE_FONT_SP = 14
  * back, or picking a repo).
  */
 @Composable
-internal fun WideTerminal(graph: AppGraph, appWidgetId: Int, onClose: () -> Unit) {
+internal fun WideTerminal(graph: AppGraph, appWidgetId: Int, initial: WidgetConfig, onClose: () -> Unit) {
     val base = LocalContext.current
     val fontScale = LocalConfiguration.current.fontScale
     val controller = remember(graph) { UiController(graph) }
     val scope = rememberCoroutineScope()
-    val config by graph.settings.widgetConfig(appWidgetId).collectAsState(WidgetConfig())
+    // Flows are created once: a new flow per recomposition would restart the collection every time.
+    val configFlow = remember(appWidgetId) { graph.settings.widgetConfig(appWidgetId) }
+    val config by configFlow.collectAsState(initial)
     val tokens by graph.tokenStore.summaries.collectAsState()
     val tokenState = remember(tokens, config.tokenId) { graph.tokenStore.stateOf(config.tokenId) }
-    val repoList by graph.repoListStore.observe().collectAsState(RepoList())
+    val repoListFlow = remember { graph.repoListStore.observe() }
+    val repoList by repoListFlow.collectAsState(RepoList())
+    val appFlow = remember { graph.settings.appSettings }
+    val app by appFlow.collectAsState(AppSettings())
     val repo = config.repo
     val snapshots = remember(repo) { repo?.let { graph.snapshots.observe(it) } ?: flowOf(null) }
     val snapshot by snapshots.collectAsState(null)
     val ctx = remember(base, config.display.language) { base.withLanguage(config.display.language) }
+    val palette = Palette.of(config.display.theme, isSystemInDarkTheme())
 
+    // Leaving the settings (picking a repo, [x], back) returns the widget to its branch list and closes this window.
     if (config.view == WidgetView.BRANCHES) LaunchedEffect(Unit) { onClose() }
-    BackHandler { scope.launch { controller.handle(appWidgetId, UiAction.Do("view", WidgetView.BRANCHES.name)) } }
+    BackHandler { scope.launch { controller.handle(appWidgetId, UiAction.Do(Cmd.VIEW, WidgetView.BRANCHES.name)) } }
 
-    BoxWithConstraints(Modifier.fillMaxSize().background(Palette.bg).windowInsetsPadding(WindowInsets.safeDrawing).padding(12.dp)) {
+    BoxWithConstraints(Modifier.fillMaxSize().background(palette.bg).windowInsetsPadding(WindowInsets.safeDrawing).padding(12.dp)) {
         val cpl = (charsPerLine(maxWidth.value, 0f, WIDE_FONT_SP.toFloat(), fontScale, Glyphs.advanceRatio) - 1).coerceAtLeast(0)
-        val env = UiEnv(ctx, appWidgetId, config, tokens, tokenState, repoList, snapshot, Clock.System.now(), Glyphs.system, cpl)
+        val env = UiEnv(ctx, appWidgetId, config, tokens, tokenState, repoList, snapshot, Clock.System.now(), Glyphs.system, cpl, app)
         val screen = buildScreen(env)
         val perform: (UiAction) -> Unit = { action ->
             when (action) {
@@ -100,9 +109,9 @@ internal fun WideTerminal(graph: AppGraph, appWidgetId: Int, onClose: () -> Unit
         }
         Column(Modifier.fillMaxSize()) {
             LazyColumn(Modifier.fillMaxWidth().weight(1f)) {
-                items(screen.body) { WideLine(it, perform, env) }
+                items(screen.body) { WideLine(it, perform, palette) }
             }
-            screen.foot.forEach { WideLine(it, perform, env) }
+            screen.foot.forEach { WideLine(it, perform, palette) }
         }
     }
 }
@@ -114,27 +123,27 @@ private fun copyToClipboard(context: Context, text: String) {
 }
 
 @Composable
-private fun WideLine(line: UiLine, perform: (UiAction) -> Unit, env: UiEnv) {
+private fun WideLine(line: UiLine, perform: (UiAction) -> Unit, palette: Palette) {
     var modifier = Modifier.fillMaxWidth()
     line.action?.let { a -> modifier = modifier.clickable { perform(a) } }
     Row(modifier.padding(vertical = 5.dp)) {
-        line.left.forEach { WideSpan(it, perform, env) }
+        line.left.forEach { WideSpan(it, perform, palette) }
         if (line.right.isNotEmpty()) {
             Spacer(Modifier.weight(1f))
-            line.right.forEach { WideSpan(it, perform, env) }
+            line.right.forEach { WideSpan(it, perform, palette) }
         }
     }
 }
 
 @Composable
-private fun WideSpan(span: UiSpan, perform: (UiAction) -> Unit, env: UiEnv) {
+private fun WideSpan(span: UiSpan, perform: (UiAction) -> Unit, palette: Palette) {
     val fontScale = LocalConfiguration.current.fontScale
     var modifier: Modifier = Modifier
     span.cells?.let { n -> modifier = modifier.width((n * WIDE_FONT_SP * fontScale * Glyphs.advanceRatio + 1f).dp) }
     span.action?.let { a -> modifier = modifier.clickable { perform(a) } }
     Text(
         text = span.text,
-        color = span.role.color(),
+        color = palette.of(span.role),
         fontFamily = FontFamily.Monospace,
         fontSize = WIDE_FONT_SP.sp,
         softWrap = span.cells == null,

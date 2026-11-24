@@ -14,7 +14,8 @@ internal fun fixture(name: String): String =
 
 internal class Harness(val log: MutableList<String> = mutableListOf()) {
     val server = MockWebServer().also { it.start() }
-    val http = createHttpClient(Files.createTempDirectory("httpcache").toFile(), "ciDGET/test", { FAKE_TOKEN })
+    val cacheDir = Files.createTempDirectory("httpcache").toFile()
+    val http = createHttpClient(cacheDir, "ciDGET/test", { FAKE_TOKEN })
     val client = GitHubClient(http, server.url("/").toString(), FixedClock, { log += it })
     fun close() = server.close()
 }

@@ -36,6 +36,8 @@ class SnapshotStore(
     private suspend fun readAll(): Map<String, RepoSnapshot> = withContext(io) {
         dir.listFiles { f -> f.name.endsWith(".json") }.orEmpty().mapNotNull { f ->
             runCatching { json.decodeFromString(RepoSnapshot.serializer(), f.readText()) }.getOrNull()
+                // No refresh survives the process that started it; a stored `[...]` would otherwise stay forever.
+                ?.copy(refreshing = false)
         }.associateBy { it.repo }
     }
 
