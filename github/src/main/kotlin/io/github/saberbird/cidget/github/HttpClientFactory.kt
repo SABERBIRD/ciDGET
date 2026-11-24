@@ -57,3 +57,13 @@ public fun createHttpClient(
     .addInterceptor(HeadersInterceptor(userAgent))
     .addInterceptor(AuthInterceptor(tokenProvider))
     .build()
+
+/**
+ * A copy of this client that authenticates with [token] instead of the stored one and has no cache.
+ * Used to validate a token before it is saved; nothing it fetches is cached.
+ */
+public fun OkHttpClient.withToken(token: String): OkHttpClient = newBuilder().apply {
+    cache(null)
+    interceptors().removeAll { it is AuthInterceptor }
+    addInterceptor(AuthInterceptor { token })
+}.build()
