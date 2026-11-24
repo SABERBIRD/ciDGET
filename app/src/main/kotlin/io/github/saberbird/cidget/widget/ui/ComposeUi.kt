@@ -128,8 +128,9 @@ private fun WideLine(line: UiLine, perform: (UiAction) -> Unit, env: UiEnv) {
 
 @Composable
 private fun WideSpan(span: UiSpan, perform: (UiAction) -> Unit, env: UiEnv) {
+    val fontScale = LocalConfiguration.current.fontScale
     var modifier: Modifier = Modifier
-    span.cells?.let { n -> modifier = modifier.width((n * WIDE_FONT_SP * env.ctx.resources.configuration.fontScale * Glyphs.advanceRatio + 1f).dp) }
+    span.cells?.let { n -> modifier = modifier.width((n * WIDE_FONT_SP * fontScale * Glyphs.advanceRatio + 1f).dp) }
     span.action?.let { a -> modifier = modifier.clickable { perform(a) } }
     Text(
         text = span.text,
