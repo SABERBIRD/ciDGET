@@ -8,15 +8,11 @@
     <string name="token_expires">Expires %1$s</string>
     <string name="token_no_expiry">No expiry date</string>
     <string name="token_invalid">The token was revoked or has expired. Create a new one and paste it here.</string>
-    <string name="token_field_label">Paste token</string>
-    <string name="token_show">Show</string>
-    <string name="token_hide">Hide</string>
-    <string name="token_save">Validate and save</string>
     <string name="token_delete">Delete token</string>
     <string name="token_howto">How to create a token</string>
     <string name="token_checking">Checking…</string>
     <string name="token_saved_ok">Token saved</string>
-    <string name="token_err_empty">Paste a token first</string>
+    <string name="token_err_empty">The clipboard is empty</string>
     <string name="token_contents_hint">Add Contents: Read-only to the token for exact branch heads</string>
     <string name="err_offline">No network connection</string>
     <string name="err_timeout">GitHub did not answer in time</string>
@@ -91,15 +87,13 @@
     <string name="copy_none">No other widgets with a repository.</string>
     <string name="token_unnamed">Token</string>
     <string name="token_item">%1$s …%2$s</string>
-    <string name="token_add_title">Add a token</string>
-    <string name="token_replace_title">Replace the token</string>
-    <string name="token_label_field">Name (optional, e.g. account or organization)</string>
-    <string name="token_replace">Replace</string>
-    <string name="token_cancel">Cancel</string>
     <string name="w_ls_prompt">~ $ ls repos</string>
     <string name="w_no_repos">no repos</string>
     <plurals name="token_count">
         <item quantity="one">%d token saved</item>
         <item quantity="other">%d tokens saved</item>
     </plurals>
+    <string name="token_paste">paste token from clipboard</string>
+    <string name="token_replace_paste">replace from clipboard</string>
+    <string name="token_paste_hint">Copy the token on GitHub, then tap the button. The clipboard is cleared after saving.</string>
 </resources>

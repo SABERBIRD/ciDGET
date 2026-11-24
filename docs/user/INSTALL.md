@@ -9,7 +9,7 @@ ciDGET is not on Google Play. You install the APK file from GitHub. Android 12 o
 2. Download `cidget-<version>.apk`.
 3. Open the downloaded file. If Android asks, allow **Install unknown apps** for your browser (or file manager), then tap **Install**.
 4. Long-press the home screen → **Widgets** → **ciDGET** → drag it to the screen. There is no app icon (D22): the settings open right away when you add the widget.
-5. Paste your token ([how to create it](TOKEN.md); you can add several), then choose a repository. Later: long-press the widget → **Reconfigure**, or tap its `~/… $ ci` header.
+5. Copy your token and tap the paste button ([how to create it](TOKEN.md); you can add several), then choose a repository. Later: long-press the widget → **Reconfigure**, or tap `[⚙]` in its header.
 
 ## Updating
 

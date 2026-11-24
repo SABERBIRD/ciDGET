@@ -16,7 +16,7 @@ A fine-grained PAT limited to selected repositories, with **Actions: read**, **C
 
 1. The token is never logged, put in exceptions, crash messages, the HTTP cache key, notifications, widgets or share text. OkHttp logging, in debug builds only, uses `HttpLoggingInterceptor.redactHeader("Authorization")`. Release builds have no HTTP logging.
 2. The token is never in source code, resources, `BuildConfig` or tests. Tests use fake tokens such as `github_pat_TEST`.
-3. Several tokens may be saved (D23). The label is not a secret. The token input field uses `KeyboardType.Password`, no autocorrect, and is masked with a show/hide toggle. The settings screen shows only the last 4 characters of a saved token.
+3. Several tokens may be saved (D23). The label is not a secret. There is no token input field (D25): a button reads the clipboard once when tapped, the text goes only into a local variable, and the clipboard is cleared after a successful save. The settings screen shows only the last 4 characters of a saved token.
 4. Add or replace a token: validate it first with `GET /user/repos?per_page=1`, then save. Delete a token: remove it from the file (the file and key go with the last one), evict the HTTP cache, the cached repo list and all snapshots, update widgets. The repo list cache `files/repos.json` holds repo names only (they may be private) and lives in app-private storage like the snapshots.
 5. On `401`, set that token's state to `INVALID`; refreshes of repos that use it stop calling the API until it is replaced; other tokens are not affected.
 6. `android:allowBackup="false"`; the cache, snapshots and token file stay in app-private storage.

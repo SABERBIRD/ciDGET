@@ -14,7 +14,7 @@ ciDGET reads your Actions statuses with a **fine-grained personal access token**
    - **Contents** → **Read-only** (needed to know the latest commit of each branch exactly; without it the widget still works but marks statuses with `~` as approximate)
    Leave everything else at **No access**.
 7. **Generate token** and copy it (`github_pat_…`). GitHub shows it only once.
-8. In ciDGET there is no app icon. Long-press the widget → **Reconfigure** (or tap the `[⚙]` in its header) → **Token** → optional name → paste → **Validate and save**. The app checks the token before saving.
+8. In ciDGET there is no app icon. Long-press the widget → **Reconfigure** (or tap the `[⚙]` in its header) → **Token** → **[ paste token from clipboard ]**. There is no input field: the app takes the token you copied on GitHub, checks it, saves it and clears the clipboard.
 9. **Several accounts or organizations:** a fine-grained token covers one owner, so create one token per owner and add each one the same way (**Token** → **Add a token**). Each widget uses the token that can see its repo; the repo list in the widget (tap the repo name) shows the repos of all tokens.
 
 ## Changing or removing it

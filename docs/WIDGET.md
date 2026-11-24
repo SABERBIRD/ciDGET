@@ -163,6 +163,7 @@ Terminal-style rows, the current repo marked `> ` in the prompt colour, archived
 
 - Each `appWidgetId` has its own `WidgetConfig` (ARCHITECTURE.md §4): repo, `useGlobalDefaults`, columns, font size, glyph style, theme, sort, pinned branches, filters, max rows, and the TINY source (worst-of-repo or pinned branch).
 - `useGlobalDefaults = true` (the default for a new widget): display settings come from the global defaults; editing them in the widget's settings switches the flag off.
+- The settings screens use the terminal look (D25): dark background, monospace, `[ button ]`, `[x]` toggles, `(*)` choices, `$ title` headers.
 - There is no launcher icon (D22). The configuration activity is the only settings UI: it is opened when the widget is added, from the widget's long-press "reconfigure" entry and from the `[⚙]` cell in the header (fallback for launchers without that entry). Tapping the repo name opens the in-widget repo list (D24), not settings. (`android:configure`, `widgetFeatures="reconfigurable|configuration_optional"`) offers: pick a repo, *copy settings from widget …* (a list of other widget instances by repo name), or keep the global defaults.
 - When a widget is removed (`onDeleted`), delete its config. Repo caches that no widget references are deleted by the next refresh.
 

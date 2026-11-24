@@ -8,10 +8,7 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -45,10 +42,8 @@ class WidgetConfigActivity : ComponentActivity() {
         setResult(RESULT_OK, Intent().putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId))
         val graph = applicationContext.graph
         setContent {
-            MaterialTheme {
-                Surface {
-                    ConfigRoot(graph, appWidgetId, onFinish = { finish() })
-                }
+            TerminalTheme {
+                ConfigRoot(graph, appWidgetId, onFinish = { finish() })
             }
         }
     }
@@ -84,8 +79,8 @@ private fun ConfigRoot(graph: AppGraph, appWidgetId: Int, onFinish: () -> Unit) 
         Screen.Repo -> if (tokens.isEmpty()) {
             Column {
                 Text(stringResource(R.string.picker_need_token), modifier = Modifier.padding(16.dp))
-                TextButton(onClick = { screen = Screen.Token }, modifier = Modifier.padding(horizontal = 16.dp)) {
-                    Text(stringResource(R.string.token_title))
+                Column(Modifier.padding(horizontal = 16.dp)) {
+                    TermButton(stringResource(R.string.token_title)) { screen = Screen.Token }
                 }
             }
         } else {
@@ -102,7 +97,5 @@ private fun ConfigRoot(graph: AppGraph, appWidgetId: Int, onFinish: () -> Unit) 
 
 @Composable
 internal fun BackButton(onClick: () -> Unit) {
-    TextButton(onClick = onClick, modifier = Modifier.padding(horizontal = 16.dp)) {
-        Text(stringResource(R.string.config_back))
-    }
+    Column(Modifier.padding(horizontal = 16.dp)) { TermButton(stringResource(R.string.config_back), onClick = onClick) }
 }

@@ -6,15 +6,11 @@
     <string name="token_expires">Спливає %1$s</string>
     <string name="token_no_expiry">Без дати завершення</string>
     <string name="token_invalid">Токен відкликано або він застарів. Створіть новий і вставте тут.</string>
-    <string name="token_field_label">Вставте токен</string>
-    <string name="token_show">Показати</string>
-    <string name="token_hide">Сховати</string>
-    <string name="token_save">Перевірити й зберегти</string>
     <string name="token_delete">Видалити токен</string>
     <string name="token_howto">Як створити токен</string>
     <string name="token_checking">Перевірка…</string>
     <string name="token_saved_ok">Токен збережено</string>
-    <string name="token_err_empty">Спершу вставте токен</string>
+    <string name="token_err_empty">Буфер обміну порожній</string>
     <string name="token_contents_hint">Додайте до токена Contents: Read-only, щоб бачити точні голови гілок</string>
     <string name="err_offline">Немає мережі</string>
     <string name="err_timeout">GitHub не відповів вчасно</string>
@@ -89,11 +85,6 @@
     <string name="copy_none">Немає інших віджетів з репозиторієм.</string>
     <string name="token_unnamed">Токен</string>
     <string name="token_item">%1$s …%2$s</string>
-    <string name="token_add_title">Додати токен</string>
-    <string name="token_replace_title">Замінити токен</string>
-    <string name="token_label_field">Назва (необовʼязково, напр. акаунт чи організація)</string>
-    <string name="token_replace">Замінити</string>
-    <string name="token_cancel">Скасувати</string>
     <string name="w_ls_prompt">~ $ ls repos</string>
     <string name="w_no_repos">немає репозиторіїв</string>
     <plurals name="token_count">
@@ -102,4 +93,7 @@
         <item quantity="many">%d токенів збережено</item>
         <item quantity="other">%d токена збережено</item>
     </plurals>
+    <string name="token_paste">вставити токен з буфера</string>
+    <string name="token_replace_paste">замінити з буфера</string>
+    <string name="token_paste_hint">Скопіюйте токен на GitHub і натисніть кнопку. Після збереження буфер очищується.</string>
 </resources>

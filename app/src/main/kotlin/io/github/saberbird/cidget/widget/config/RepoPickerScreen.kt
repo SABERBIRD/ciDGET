@@ -7,7 +7,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -52,7 +51,7 @@ fun RepoPickerScreen(graph: AppGraph, onPicked: suspend (repo: String, tokenId: 
     LaunchedEffect(Unit) { graph.requestRepoList() }
 
     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text(stringResource(R.string.picker_title), style = MaterialTheme.typography.titleLarge)
+        TermTitle(stringResource(R.string.picker_title))
         OutlinedTextField(
             value = manual,
             onValueChange = { manual = it; error = null; badFormat = false },
@@ -66,13 +65,14 @@ fun RepoPickerScreen(graph: AppGraph, onPicked: suspend (repo: String, tokenId: 
             val msg = if (it.arg != null) stringResource(it.res, it.arg) else stringResource(it.res)
             Text(msg, color = MaterialTheme.colorScheme.error)
         }
-        Button(
+        TermButton(
+            stringResource(R.string.picker_use),
             enabled = !checking && manual.isNotBlank(),
             onClick = {
                 val text = manual.trim()
                 if (!repoPattern.matches(text)) {
                     badFormat = true
-                    return@Button
+                    return@TermButton
                 }
                 checking = true
                 scope.launch {
@@ -88,7 +88,7 @@ fun RepoPickerScreen(graph: AppGraph, onPicked: suspend (repo: String, tokenId: 
                     checking = false
                 }
             },
-        ) { Text(stringResource(R.string.picker_use)) }
+        )
 
         list.error?.let {
             val e = it.toErrorText()
