@@ -28,11 +28,13 @@ import androidx.glance.text.TextStyle
 import androidx.glance.unit.ColorProvider
 import io.github.saberbird.cidget.R
 import io.github.saberbird.cidget.core.BranchStatus
-import io.github.saberbird.cidget.core.GreyReason
 import io.github.saberbird.cidget.core.Status
 import io.github.saberbird.cidget.core.ViewOptions
 import io.github.saberbird.cidget.core.formatAge
+import io.github.saberbird.cidget.core.rowUrl
 import io.github.saberbird.cidget.core.selectBranches
+import io.github.saberbird.cidget.core.shareText
+import io.github.saberbird.cidget.action.ActionActivity
 import io.github.saberbird.cidget.data.RepoSnapshot
 import io.github.saberbird.cidget.settings.SettingsActivity
 import io.github.saberbird.cidget.widget.config.RepoPickerActivity
@@ -50,8 +52,6 @@ private fun statusColor(b: BranchStatus): Color = when (b.status) {
     Status.GREEN -> Palette.green
     Status.GREY -> Palette.grey
 }
-
-private fun branchUrl(repo: String, branch: String) = "https://github.com/$repo/tree/" + Uri.encode(branch, "/")
 
 private fun viewIntent(appWidgetId: Int, url: String) =
     Intent(Intent.ACTION_VIEW, Uri.parse(url)).putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId)
@@ -123,15 +123,26 @@ private fun Rows(context: Context, appWidgetId: Int, repo: String, snapshot: Rep
     LazyColumn(GlanceModifier.fillMaxSize()) {
         items(rows) { b ->
             val rep = b.representative
-            val url = rep?.htmlUrl ?: branchUrl(repo, b.branch)
+            val url = rowUrl(repo, b)
             val status = glyphs.forStatus(b.status) + if (b.headApproximate) "~" else " "
             val run = rep?.let { "#${it.runNumber}" }.orEmpty().padStart(5)
             val age = rep?.let { formatAge(it.updatedAt, now) }.orEmpty().padStart(3)
-            val noRuns = b.greyReason == GreyReason.NO_RUNS
             Row(GlanceModifier.fillMaxWidth().clickable(actionStartActivity(viewIntent(appWidgetId, url)))) {
                 Text(status, style = style(statusColor(b)))
                 Text(b.branch, style = style(Palette.fg), maxLines = 1, modifier = GlanceModifier.defaultWeight())
-                Text(" $run $age ${if (noRuns) " " else glyphs.copy}", style = style(Palette.dim), maxLines = 1)
+                Text(" $run $age ", style = style(Palette.dim), maxLines = 1)
+                Text(
+                    "[${glyphs.copy}]",
+                    style = style(Palette.dim),
+                    modifier = GlanceModifier.clickable(actionStartActivity(ActionActivity.copy(context, appWidgetId, b.branch, url))),
+                )
+                Text(
+                    "[${glyphs.share}]",
+                    style = style(Palette.dim),
+                    modifier = GlanceModifier.clickable(
+                        actionStartActivity(ActionActivity.share(context, appWidgetId, b.branch, shareText(repo, b))),
+                    ),
+                )
             }
         }
     }

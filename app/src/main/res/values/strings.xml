@@ -57,4 +57,5 @@
     <string name="w_err_http">! http %1$d</string>
     <string name="w_err_parse">! bad response</string>
     <string name="w_err_unexpected">! error</string>
+    <string name="action_copied">Link copied</string>
 </resources>

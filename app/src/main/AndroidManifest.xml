@@ -26,6 +26,14 @@
             android:exported="false"
             android:theme="@android:style/Theme.Material.Dialog" />
 
+        <activity
+            android:name=".action.ActionActivity"
+            android:excludeFromRecents="true"
+            android:exported="false"
+            android:noHistory="true"
+            android:taskAffinity=""
+            android:theme="@style/Theme.Cidget.Transparent" />
+
         <receiver
             android:name=".widget.CidgetWidgetReceiver"
             android:exported="true"

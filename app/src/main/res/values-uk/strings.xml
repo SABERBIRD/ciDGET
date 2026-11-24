@@ -55,4 +55,5 @@
     <string name="w_err_http">! http %1$d</string>
     <string name="w_err_parse">! погана відповідь</string>
     <string name="w_err_unexpected">! помилка</string>
+    <string name="action_copied">Посилання скопійовано</string>
 </resources>
