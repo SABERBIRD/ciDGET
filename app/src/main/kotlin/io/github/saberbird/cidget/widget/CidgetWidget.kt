@@ -7,6 +7,8 @@ import androidx.compose.runtime.remember
 import androidx.glance.GlanceId
 import androidx.glance.appwidget.GlanceAppWidget
 import androidx.glance.appwidget.GlanceAppWidgetManager
+import androidx.glance.appwidget.SizeMode
+import io.github.saberbird.cidget.core.DisplaySettings
 import androidx.glance.appwidget.provideContent
 import io.github.saberbird.cidget.graph
 import kotlinx.coroutines.flow.flowOf
@@ -17,6 +19,8 @@ import kotlinx.datetime.Clock
  * state from local stores, so it renders instantly from cache (also right after a reboot).
  */
 class CidgetWidget : GlanceAppWidget() {
+    override val sizeMode: SizeMode = SizeMode.Exact
+
     override suspend fun provideGlance(context: Context, id: GlanceId) {
         val graph = context.graph
         val appWidgetId = GlanceAppWidgetManager(context).getAppWidgetId(id)
@@ -27,6 +31,7 @@ class CidgetWidget : GlanceAppWidget() {
             val snapshots = remember(repo) { repo?.let { graph.snapshots.observe(it) } ?: flowOf(null) }
             val snapshot by snapshots.collectAsState(if (repo == initialRepo) initialSnapshot else null)
             val token by graph.tokenStore.summary.collectAsState()
+            val display by graph.settings.effectiveDisplay(appWidgetId).collectAsState(DisplaySettings())
             WidgetContent(
                 appWidgetId = appWidgetId,
                 repo = repo,
@@ -35,6 +40,7 @@ class CidgetWidget : GlanceAppWidget() {
                 tokenInvalid = token?.state == io.github.saberbird.cidget.data.TokenState.INVALID,
                 now = Clock.System.now(),
                 glyphs = Glyphs.system,
+                display = display,
             )
         }
     }

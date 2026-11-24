@@ -6,39 +6,90 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import io.github.saberbird.cidget.core.DisplaySettings
+import io.github.saberbird.cidget.core.WidgetConfig
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import kotlinx.serialization.json.Json
 
 private val Context.settingsStore: DataStore<Preferences> by preferencesDataStore(name = "settings")
 
-private const val WIDGET_REPO_PREFIX = "widget_repo_"
+private const val WIDGET_PREFIX = "widget_config_"
+private val GLOBAL_KEY = stringPreferencesKey("global_display")
 
 /**
- * App settings in the single DataStore `settings`. For now: which repository each widget shows.
- * Later tasks add the rest of `WidgetConfig` and the global defaults.
+ * App settings in the single DataStore `settings`: one [WidgetConfig] JSON per `appWidgetId` and the
+ * global [DisplaySettings] defaults. Unreadable values fall back to defaults.
  */
 class SettingsRepository(private val store: DataStore<Preferences>) {
     constructor(context: Context) : this(context.applicationContext.settingsStore)
 
-    private fun key(appWidgetId: Int) = stringPreferencesKey(WIDGET_REPO_PREFIX + appWidgetId)
+    private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
+
+    private fun key(appWidgetId: Int) = stringPreferencesKey(WIDGET_PREFIX + appWidgetId)
+
+    private fun decodeConfig(s: String?): WidgetConfig =
+        s?.let { runCatching { json.decodeFromString(WidgetConfig.serializer(), it) }.getOrNull() } ?: WidgetConfig()
+
+    private fun decodeGlobal(s: String?): DisplaySettings =
+        (s?.let { runCatching { json.decodeFromString(DisplaySettings.serializer(), it) }.getOrNull() } ?: DisplaySettings()).normalized()
+
+    /** Configuration of one widget (defaults while none is stored). */
+    fun widgetConfig(appWidgetId: Int): Flow<WidgetConfig> =
+        store.data.map { decodeConfig(it[key(appWidgetId)]) }.distinctUntilChanged()
+
+    suspend fun getWidgetConfig(appWidgetId: Int): WidgetConfig = widgetConfig(appWidgetId).first()
+
+    /** Reads, transforms and stores a widget's configuration atomically. */
+    suspend fun updateWidget(appWidgetId: Int, transform: (WidgetConfig) -> WidgetConfig) {
+        store.edit { prefs ->
+            val next = transform(decodeConfig(prefs[key(appWidgetId)]))
+            prefs[key(appWidgetId)] = json.encodeToString(WidgetConfig.serializer(), next)
+        }
+    }
 
     /** `owner/repo` shown by the widget, or null while none is chosen. */
-    fun widgetRepo(appWidgetId: Int): Flow<String?> = store.data.map { it[key(appWidgetId)] }.distinctUntilChanged()
+    fun widgetRepo(appWidgetId: Int): Flow<String?> = widgetConfig(appWidgetId).map { it.repo }.distinctUntilChanged()
 
-    suspend fun getWidgetRepo(appWidgetId: Int): String? = widgetRepo(appWidgetId).first()
+    suspend fun getWidgetRepo(appWidgetId: Int): String? = getWidgetConfig(appWidgetId).repo
 
-    suspend fun setWidgetRepo(appWidgetId: Int, repo: String) {
-        store.edit { it[key(appWidgetId)] = repo }
+    suspend fun setWidgetRepo(appWidgetId: Int, repo: String) = updateWidget(appWidgetId) { it.copy(repo = repo) }
+
+    /** Global defaults for widgets that do not override them. */
+    fun globalDisplay(): Flow<DisplaySettings> = store.data.map { decodeGlobal(it[GLOBAL_KEY]) }.distinctUntilChanged()
+
+    suspend fun updateGlobal(transform: (DisplaySettings) -> DisplaySettings) {
+        store.edit { prefs ->
+            val next = transform(decodeGlobal(prefs[GLOBAL_KEY])).normalized()
+            prefs[GLOBAL_KEY] = json.encodeToString(DisplaySettings.serializer(), next)
+        }
     }
+
+    /** The settings a widget renders with: its own or the global defaults, following its flag. */
+    fun effectiveDisplay(appWidgetId: Int): Flow<DisplaySettings> =
+        combine(widgetConfig(appWidgetId), globalDisplay()) { c, g -> c.effective(g) }.distinctUntilChanged()
 
     /** Forgets a widget's settings (called when the widget is removed). */
     suspend fun deleteWidget(appWidgetId: Int) {
         store.edit { it.remove(key(appWidgetId)) }
     }
 
+    /** All stored widget configurations by `appWidgetId`. */
+    suspend fun allWidgets(): Map<Int, WidgetConfig> =
+        store.data.first().asMap().mapNotNull { (k, v) ->
+            val id = k.name.removePrefix(WIDGET_PREFIX).takeIf { k.name.startsWith(WIDGET_PREFIX) }?.toIntOrNull()
+            id?.let { it to decodeConfig(v as? String) }
+        }.toMap()
+
     /** Distinct repos used by at least one widget. */
-    suspend fun reposInUse(): Set<String> =
-        store.data.first().asMap().filter { it.key.name.startsWith(WIDGET_REPO_PREFIX) }.values.map { it as String }.toSet()
+    suspend fun reposInUse(): Set<String> = allWidgets().values.mapNotNull { it.repo }.toSet()
+
+    /** Copies the display settings (and the use-global flag) of [from] to [to]; the repo stays. */
+    suspend fun copySettings(from: Int, to: Int) {
+        val source = getWidgetConfig(from)
+        updateWidget(to) { it.copy(useGlobalDefaults = source.useGlobalDefaults, display = source.display) }
+    }
 }
