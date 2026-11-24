@@ -75,7 +75,7 @@ Worker rules:
 
 | Store | Tech | Contents |
 |---|---|---|
-| `TokenStore` | file `files/token.bin` (IV + AES-GCM ciphertext), key in Android Keystore | the PAT, its state (`OK`, `INVALID`), expiry date |
+| `TokenStore` | file `files/token.bin` (IV + AES-GCM ciphertext of a small JSON payload), key in Android Keystore | the PAT, its state (`OK`, `INVALID`), expiry date |
 | `SettingsRepository` | Preferences/Proto DataStore `settings` (one instance) | global defaults, per-widget `WidgetConfig` map keyed by `appWidgetId`, refresh settings, glyph availability cache |
 | `SnapshotStore` | one JSON file per repo in `files/snapshots/{owner}__{repo}.json` (kotlinx.serialization, atomic write via temp + rename) | `RepoSnapshot` |
 | HTTP cache | OkHttp `Cache` in `cacheDir/http` | ETag'd responses |
@@ -86,7 +86,7 @@ Worker rules:
     val fetchedAt: Instant?,              // last successful refresh
     val branches: List<BranchStatus>,     // aggregated, unsorted
     val headsApproximate: Boolean,
-    val error: ApiErrorKind?,             // last refresh error, null if the last refresh succeeded
+    val error: ApiError?,                 // last refresh error (:github sealed type, serializable), null if the last refresh succeeded
     val errorAt: Instant?,
     val rateLimitedUntil: Instant?,
     val refreshing: Boolean,

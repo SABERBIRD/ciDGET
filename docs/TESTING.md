@@ -9,7 +9,8 @@
 | `:core` | formatters: age, duration, event, glyph fallback mapping, share text | WIDGET.md §1, §3 |
 | `:github` | parsing, pagination, ETag, errors, headers (MockWebServer) | GITHUB_API.md §6 |
 | `:app` | `TokenStore` encrypt/decrypt round trip and corrupt-file handling (instrumented, emulator) | SECURITY.md |
-| `:app` | `RefreshWorker` with a fake `GitHubClient` (WorkManager `TestListenableWorkerBuilder`, Robolectric allowed here only): error → snapshot kept, `401` → token INVALID, rate limit → skip | ARCHITECTURE.md §3 |
+| `:app` | `RefreshRepository` (the logic behind `RefreshWorker`) with a fake `RepoFetcher`, plain JVM, no Robolectric: error → snapshot kept, `401` → token INVALID, rate limit → skip | ARCHITECTURE.md §3 |
+| `:app` | `TokenStore` file format and corrupt-file recovery with an ordinary AES key (JVM); the real Keystore round trip stays a manual check on a device | SECURITY.md |
 
 Rules:
 - `:core` and `:github` tests must not need Android.
