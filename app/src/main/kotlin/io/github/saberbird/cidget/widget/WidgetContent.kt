@@ -36,8 +36,7 @@ import io.github.saberbird.cidget.core.selectBranches
 import io.github.saberbird.cidget.core.shareText
 import io.github.saberbird.cidget.action.ActionActivity
 import io.github.saberbird.cidget.data.RepoSnapshot
-import io.github.saberbird.cidget.settings.SettingsActivity
-import io.github.saberbird.cidget.widget.config.RepoPickerActivity
+import io.github.saberbird.cidget.widget.config.WidgetConfigActivity
 import kotlinx.datetime.Instant
 
 private fun style(color: Color) = TextStyle(
@@ -69,12 +68,9 @@ internal fun WidgetContent(
 ) {
     val context = LocalContext.current
     val picker: Action = actionStartActivity(
-        Intent(context, RepoPickerActivity::class.java)
+        Intent(context, WidgetConfigActivity::class.java)
             .putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId)
             .setData(Uri.parse("cidget://picker/$appWidgetId")),
-    )
-    val settings: Action = actionStartActivity(
-        Intent(context, SettingsActivity::class.java).setData(Uri.parse("cidget://settings/$appWidgetId")),
     )
     Column(GlanceModifier.fillMaxSize().background(Palette.bg).padding(8.dp)) {
         Row(GlanceModifier.fillMaxWidth()) {
@@ -102,7 +98,7 @@ internal fun WidgetContent(
             !tokenPresent -> Text(
                 context.getString(R.string.w_set_token),
                 style = style(Palette.dim),
-                modifier = GlanceModifier.fillMaxWidth().clickable(settings),
+                modifier = GlanceModifier.fillMaxWidth().clickable(picker),
             )
             snapshot == null || (snapshot.fetchedAt == null && snapshot.branches.isEmpty()) -> Text(
                 context.getString(if (snapshot?.error == null) R.string.w_loading else R.string.w_no_data),

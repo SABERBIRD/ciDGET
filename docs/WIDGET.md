@@ -139,7 +139,7 @@ If more than 8 text segments would result, all non-status text columns use `fg` 
 | `[⧉]` | Copy the run URL | `actionStartActivity` → `ActionActivity` (translucent, `noHistory`, `excludeFromRecents`, `taskAffinity=""`, no animation): `ClipboardManager.setPrimaryClip`, then a Toast *only on API ≤ 32* (API 33+ shows its own clipboard confirmation), then `finish()`. |
 | `[↗]` | Share | Same `ActionActivity`: `startActivity(Intent.createChooser(ACTION_SEND text/plain, null))`, then `finish()`. Text: `CI ✗ testING/main #412 CI: https://github.com/…`, using the Unicode glyph even if the widget uses brackets. |
 | `[⟳]` | Refresh this repo | `actionRunCallback<RefreshCallback>` → enqueue expedited unique work `refresh:{owner}/{repo}` with `ExistingWorkPolicy.KEEP`. Show `[...]` immediately by writing `refreshing = true` to the repo state. |
-| Header prompt | Choose repo | `actionStartActivity(RepoPickerActivity)` (dialog theme) with the `appWidgetId`. Lists repos from `/user/repos` plus an `owner/repo` text field. Selecting one saves it for this widget and enqueues a refresh. |
+| Header prompt | Settings (D22) | `actionStartActivity(WidgetConfigActivity)` (dialog theme) with the `appWidgetId`: the same activity the launcher opens from the widget's reconfigure menu. Shows the token screen and the repo picker (repos from `/user/repos` plus an `owner/repo` text field). Selecting a repo saves it for this widget and enqueues a refresh. |
 | TINY widget | Open the representative run of the shown status | Same as a row. |
 
 All `PendingIntent`s are immutable. Every `Intent` carries the `appWidgetId` and a unique data URI or request code, so the intents of different rows and widgets don't collide.
@@ -148,7 +148,7 @@ All `PendingIntent`s are immutable. Every `Intent` carries the `appWidgetId` and
 
 - Each `appWidgetId` has its own `WidgetConfig` (ARCHITECTURE.md §4): repo, `useGlobalDefaults`, columns, font size, glyph style, theme, sort, pinned branches, filters, max rows, and the TINY source (worst-of-repo or pinned branch).
 - `useGlobalDefaults = true` (the default for a new widget): display settings come from the global defaults; editing them in the widget's settings switches the flag off.
-- The configuration activity (`android:configure`, `widgetFeatures="reconfigurable|configuration_optional"`) offers: pick a repo, *copy settings from widget …* (a list of other widget instances by repo name), or keep the global defaults.
+- There is no launcher icon (D22). The configuration activity is the only settings UI: it is opened when the widget is added, from the widget's long-press "reconfigure" entry and from a tap on the header (fallback for launchers without that entry). (`android:configure`, `widgetFeatures="reconfigurable|configuration_optional"`) offers: pick a repo, *copy settings from widget …* (a list of other widget instances by repo name), or keep the global defaults.
 - When a widget is removed (`onDeleted`), delete its config. Repo caches that no widget references are deleted by the next refresh.
 
 ## 6. Provider XML

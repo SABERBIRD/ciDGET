@@ -16,6 +16,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -34,18 +35,21 @@ import io.github.saberbird.cidget.github.ApiResult
 import io.github.saberbird.cidget.github.RepoSummary
 import io.github.saberbird.cidget.graph
 import io.github.saberbird.cidget.settings.ErrorText
-import io.github.saberbird.cidget.settings.SettingsActivity
+import io.github.saberbird.cidget.settings.TokenScreen
 import io.github.saberbird.cidget.settings.toErrorText
 import kotlinx.coroutines.launch
 
 private val repoPattern = Regex("^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$")
 
 /**
- * Dialog opened from the widget header: pick a repo from `/user/repos` (private ones get a lock) or type
- * `owner/repo`, which is checked with `GET /repos/{owner}/{repo}`. Saves the choice for this widget and
- * queues a refresh.
+ * The app's only settings UI (D22: no launcher icon). It is the widget's configuration activity, opened
+ * by the system when the widget is added and from the widget's "reconfigure" menu entry, and by a tap on
+ * the widget header as a fallback for launchers without that entry. It shows the token screen (always
+ * first when no token is saved) and the repo picker: pick from `/user/repos` (private ones get a lock) or
+ * type `owner/repo`, checked with `GET /repos/{owner}/{repo}`. The choice is saved for this widget and a
+ * refresh is queued. Backing out keeps the widget (`configuration_optional`).
  */
-class RepoPickerActivity : ComponentActivity() {
+class WidgetConfigActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val appWidgetId = intent.getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, AppWidgetManager.INVALID_APPWIDGET_ID)
@@ -53,15 +57,14 @@ class RepoPickerActivity : ComponentActivity() {
             finish()
             return
         }
+        // Keep the widget even if the user backs out (configuration_optional).
+        setResult(RESULT_OK, Intent().putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId))
         val graph = applicationContext.graph
         setContent {
             MaterialTheme {
                 Surface {
                     PickerContent(graph, onPicked = { repo ->
                         graph.pick(appWidgetId, repo)
-                        finish()
-                    }, onOpenSettings = {
-                        startActivity(Intent(this, SettingsActivity::class.java))
                         finish()
                     })
                 }
@@ -78,7 +81,7 @@ private suspend fun AppGraph.pick(appWidgetId: Int, repo: String) {
 }
 
 @Composable
-private fun PickerContent(graph: AppGraph, onPicked: suspend (String) -> Unit, onOpenSettings: () -> Unit) {
+private fun PickerContent(graph: AppGraph, onPicked: suspend (String) -> Unit) {
     val token by graph.tokenStore.summary.collectAsState()
     val scope = rememberCoroutineScope()
     var repos by remember { mutableStateOf<List<RepoSummary>?>(null) }
@@ -86,9 +89,22 @@ private fun PickerContent(graph: AppGraph, onPicked: suspend (String) -> Unit, o
     var manual by remember { mutableStateOf("") }
     var checking by remember { mutableStateOf(false) }
     var badFormat by remember { mutableStateOf(false) }
+    var showToken by remember { mutableStateOf(token == null) }
 
-    LaunchedEffect(token != null) {
-        if (token == null) return@LaunchedEffect
+    if (showToken || token == null) {
+        Column {
+            TokenScreen(graph, showContentsHint = false, modifier = Modifier.weight(1f, fill = false))
+            if (token != null) {
+                TextButton(onClick = { showToken = false }, modifier = Modifier.padding(horizontal = 16.dp)) {
+                    Text(stringResource(R.string.config_back))
+                }
+            }
+        }
+        return
+    }
+
+    LaunchedEffect(token != null && !showToken) {
+        if (token == null || showToken) return@LaunchedEffect
         when (val r = graph.github.listUserRepos()) {
             is ApiResult.Ok -> repos = r.value
             is ApiResult.Err -> error = r.error.toErrorText()
@@ -97,11 +113,7 @@ private fun PickerContent(graph: AppGraph, onPicked: suspend (String) -> Unit, o
 
     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text(stringResource(R.string.picker_title), style = MaterialTheme.typography.titleLarge)
-        if (token == null) {
-            Text(stringResource(R.string.picker_need_token))
-            Button(onClick = onOpenSettings) { Text(stringResource(R.string.picker_open_settings)) }
-            return@Column
-        }
+        TextButton(onClick = { showToken = true }) { Text(stringResource(R.string.token_title)) }
         OutlinedTextField(
             value = manual,
             onValueChange = { manual = it; error = null; badFormat = false },

@@ -10,7 +10,7 @@ Order: tasks within a stage can run in parallel where *Depends on* allows.
 
 ### T1. Project skeleton and CI
 - **Depends on:** –
-- **Do:** Gradle setup as in BUILD_AND_RELEASE.md §1 with modules `:core`, `:github`, `:app`. `build.yml` and `release.yml` as in §2. An empty Glance widget that renders `~/ $ ci`. `en` + `uk` string resources. `locales_config.xml`. `allowBackup=false`. Launcher activity = settings screen placeholder. Generate and commit the public signing key per BUILD_AND_RELEASE.md §1 and sign debug and release builds with it.
+- **Do:** Gradle setup as in BUILD_AND_RELEASE.md §1 with modules `:core`, `:github`, `:app`. `build.yml` and `release.yml` as in §2. An empty Glance widget that renders `~/ $ ci`. `en` + `uk` string resources. `locales_config.xml`. `allowBackup=false`. Launcher activity = settings screen placeholder (superseded by D22: no launcher activity; settings live in the widget configuration activity). Generate and commit the public signing key per BUILD_AND_RELEASE.md §1 and sign debug and release builds with it.
 - **Done when:** `./gradlew check assembleDebug` passes locally and in CI; the debug APK artifact is uploaded; a `v0.0.1-test` tag on a fork builds a signed release (`apksigner verify` passes); two consecutive debug APKs from CI install over each other without uninstalling; the widget can be placed on an API 31 emulator.
 
 ### T2. Core models and aggregation
@@ -25,7 +25,7 @@ Order: tasks within a stage can run in parallel where *Depends on* allows.
 
 ### T4. Token storage and token screen
 - **Depends on:** T1
-- **Do:** `TokenStore` per SECURITY.md. Settings → Token screen (Compose M3): paste, show/hide, validate (`/user/repos?per_page=1`), save, replace, delete (evicts HTTP cache and snapshots), shows last 4 chars, expiry date, `INVALID` state with explanation. Link to user/TOKEN.md (the GitHub page). If the branch list for any repo was forbidden, show a hint: "Add Contents: Read-only to the token for exact branch heads". The repo picker marks private repos with a lock and lists public repos too (V3: `/user/repos` returns the granted private repos plus all of the owner's public repos).
+- **Do:** `TokenStore` per SECURITY.md. Token screen (Compose M3, shown inside the widget configuration activity, D22): paste, show/hide, validate (`/user/repos?per_page=1`), save, replace, delete (evicts HTTP cache and snapshots), shows last 4 chars, expiry date, `INVALID` state with explanation. Link to user/TOKEN.md (the GitHub page). If the branch list for any repo was forbidden, show a hint: "Add Contents: Read-only to the token for exact branch heads". The repo picker marks private repos with a lock and lists public repos too (V3: `/user/repos` returns the granted private repos plus all of the owner's public repos).
 - **Done when:** instrumented test of encrypt/decrypt round trip and of corrupt-file recovery; manual check on emulator; the token string appears in no log (`adb logcat` grep during save and refresh).
 
 ### T5. Snapshot store, refresh worker, manual refresh
@@ -61,7 +61,7 @@ Order: tasks within a stage can run in parallel where *Depends on* allows.
 
 ### T10. Per-widget settings, global defaults, configuration activity
 - **Depends on:** T9
-- **Do:** full `WidgetConfig` + global defaults in DataStore; the configuration activity (`reconfigurable|configuration_optional`) with repo, "copy settings from widget…", "use global defaults"; settings screens for columns (enable, drag order via `sh.calvin.reorderable`, priority high/medium/low) and display (glyph style, font size, TINY source). Enforce "STATUS or BRANCH must stay enabled". Delete config in `onDeleted`.
+- **Do:** full `WidgetConfig` + global defaults in DataStore; extend the configuration activity (`reconfigurable|configuration_optional`; since D22 it already hosts token and repo, and is the only settings UI, with no launcher icon) with repo, "copy settings from widget…", "use global defaults"; settings screens for columns (enable, drag order via `sh.calvin.reorderable`, priority high/medium/low) and display (glyph style, font size, TINY source). Enforce "STATUS or BRANCH must stay enabled". Delete config in `onDeleted`.
 - **Done when:** two widgets with different repos and columns work independently; copying settings works; the defaults change all widgets that inherit them and none that don't; settings survive an app restart.
 
 ---
