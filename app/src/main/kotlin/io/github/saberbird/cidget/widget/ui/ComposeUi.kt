@@ -31,6 +31,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
@@ -61,6 +62,7 @@ private const val WIDE_FONT_SP = 14
 @Composable
 internal fun WideTerminal(graph: AppGraph, appWidgetId: Int, onClose: () -> Unit) {
     val base = LocalContext.current
+    val fontScale = LocalConfiguration.current.fontScale
     val controller = remember(graph) { UiController(graph) }
     val scope = rememberCoroutineScope()
     val config by graph.settings.widgetConfig(appWidgetId).collectAsState(WidgetConfig())
@@ -76,7 +78,7 @@ internal fun WideTerminal(graph: AppGraph, appWidgetId: Int, onClose: () -> Unit
     BackHandler { scope.launch { controller.handle(appWidgetId, UiAction.Do("view", WidgetView.BRANCHES.name)) } }
 
     BoxWithConstraints(Modifier.fillMaxSize().background(Palette.bg).windowInsetsPadding(WindowInsets.safeDrawing).padding(12.dp)) {
-        val cpl = (charsPerLine(maxWidth.value, 0f, WIDE_FONT_SP.toFloat(), base.resources.configuration.fontScale, Glyphs.advanceRatio) - 1).coerceAtLeast(0)
+        val cpl = (charsPerLine(maxWidth.value, 0f, WIDE_FONT_SP.toFloat(), fontScale, Glyphs.advanceRatio) - 1).coerceAtLeast(0)
         val env = UiEnv(ctx, appWidgetId, config, tokens, tokenState, repoList, snapshot, Clock.System.now(), Glyphs.system, cpl)
         val screen = buildScreen(env)
         val perform: (UiAction) -> Unit = { action ->
