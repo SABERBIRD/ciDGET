@@ -24,3 +24,4 @@ Decisions agreed with the project owner. Change one only with the owner's agreem
 | D18 | Same workflow triggered by different events on one commit (e.g. `push` and `pull_request`) counts as **separate** workflows | A failing `push` run must not be hidden by a later passing `pull_request` run. |
 | D19 | Test fixture repository: **`SABERBIRD/testING`**. Private access was verified on it (V1); it is made public afterwards so Actions minutes are free. | See [TESTING.md](TESTING.md). |
 | D20 | Repositories with more branches than the branch-list page cap: exact heads for the branches that are displayed, approximate (`~`) for the rest (GITHUB_API.md §3.1). | Verified with `microsoft/vscode`: ~6,200 branches (62 pages), ~40,000 runs (400 pages). |
+| D21 | Branches **without any runs** on their latest commit are **shown by default** as `○` (grey), placed after branches with runs; a setting hides them. | Owner's choice (overrides the brief, which hid them by default). |

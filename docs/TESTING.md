@@ -42,7 +42,7 @@ Two workflows (`CI`, `Lint`) run `.ci/run.sh`, which reads its mode for each wor
 | `running` | CI ~15 min | YELLOW while running (re-run to repeat) |
 | `cancelled` | CI cancels itself | GREY (INCOMPLETE) |
 | `flaky` | CI fails on attempt 1, passes on re-run | RED → GREEN after *Re-run failed jobs* |
-| `no-ci` | workflows ignore the branch | hidden; GREY NO_RUNS with "show all branches" |
+| `no-ci` | workflows ignore the branch | `○` GREY NO_RUNS, near the bottom; hidden with *hide branches without runs* |
 | `new-commit` | green commit, then a newer `[skip ci]` commit | GREY NO_RUNS in accurate mode (old green must not leak) |
 | `feature/a-very-long-branch-name-to-test-truncation-in-narrow-widgets` | pass | GREEN, truncated |
 

@@ -80,7 +80,7 @@ Order: tasks within a stage can run in parallel where *Depends on* allows.
 
 ### T13. Filters and sorting settings
 - **Depends on:** T10
-- **Do:** UI for sort key, pinned branches (choose from known branches or type), hide idle after N days, max rows, show all branches. Wire to the `:core` functions from T2.
+- **Do:** UI for sort key, pinned branches (choose from known branches or type), hide idle after N days, max rows, hide branches without runs (default off). Wire to the `:core` functions from T2.
 - **Done when:** manual check with `testING` for each option; pinned branches stay first under every sort.
 
 ### T14. Themes

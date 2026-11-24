@@ -44,7 +44,7 @@ Map DTOs to `:core` models (`Run`, `BranchHead`) in `:github`. `:core` never see
 
 ## 3. Refresh algorithm for one repository
 
-Input: `owner/repo`, settings (`maxRunPages`, `hideIdleDays`, `showAllBranches`, pinned branches, `maxRows`).
+Input: `owner/repo`, settings (`maxRunPages`, `hideIdleDays`, `hideBranchesWithoutRuns`, pinned branches, `maxRows`).
 
 ### 3.1 Branch heads
 1. Unless the repo is marked `branchesForbidden` (cached flag, re-checked once per 24 h and on every token change), fetch all branch pages.

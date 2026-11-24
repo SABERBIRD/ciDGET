@@ -30,6 +30,8 @@ The widget is built with Jetpack Glance (`GlanceAppWidget`). Platform limits beh
 | GREEN | `✓` | `[OK]` |
 | GREY | `○` | `[--]` |
 
+`○` (empty circle) is used for every grey case: no CI on the latest commit (`NO_RUNS`), cancelled, skipped only, not loaded. Branches without runs are shown by default (D21); their other columns are blank and a tap opens the branch page.
+
 Glyph fallback: at startup, and whenever the font settings change, the app checks each glyph with `Paint(Typeface.MONOSPACE).hasGlyph(s)`. Missing glyphs fall back as `✗→x`, `●→*`, `✓→v`, `○→o`, `⧉→cp`, `↗→sh`, `⟳→r`, `…→~`. The result is cached in settings. The glyph is always paired with colour, so status is readable without colour vision.
 
 In approximate-head mode (D8 fallback) the glyph gets a `~` suffix in the status column, for example `✓~`.

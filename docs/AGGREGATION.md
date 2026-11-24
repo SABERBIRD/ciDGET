@@ -59,7 +59,7 @@ Every run maps to exactly one `RunState`:
 1. Drop runs where `headBranch == null` or `fromFork == true`.
 2. Group the remaining runs by `headBranch`.
 3. **Head commit of a branch:**
-   - **Accurate mode** (`heads != null`): `headSha = heads[branch].sha`. Branches present in `heads` but without runs exist (they matter for "show all branches"). Runs whose branch is not in `heads` are dropped if `headsComplete` (the branch was deleted). If not `headsComplete`, such a branch uses fallback mode for itself (`headApproximate = true`).
+   - **Accurate mode** (`heads != null`): `headSha = heads[branch].sha`. Branches present in `heads` but without runs exist (they are shown as `○` NO_RUNS, D21). Runs whose branch is not in `heads` are dropped if `headsComplete` (the branch was deleted). If not `headsComplete`, such a branch uses fallback mode for itself (`headApproximate = true`).
    - **Fallback mode** (`heads == null`): `headSha` = `headSha` of the run with the greatest `createdAt` (tie → greater `id`). The resulting `BranchStatus.headApproximate = true`.
 4. **Runs of the commit:** runs of this branch with `run.headSha == headSha`. Runs of the same SHA on *other* branches are **not** borrowed.
 5. **Coverage check** (accurate mode only): if the branch has no runs for `headSha` among the fetched runs, but `runsCoverageStart != null` (pagination stopped early), the result is `UNKNOWN_COVERAGE`. The data layer resolves it with a targeted `?head_sha=` request (see GITHUB_API.md §3.3) and runs aggregation again. If that is not possible, the branch is grey with reason `NOT_LOADED`.
@@ -117,8 +117,8 @@ Duration of the representative run: `updatedAt - runStartedAt` when completed, `
 
 Applied after aggregation, in this order:
 
-1. Drop branches with `NO_RUNS` unless "show all branches" is on.
-2. Drop branches whose `lastActivity` is older than *hide idle after N days* (pinned branches are never dropped; branches with no activity at all count as idle only when "show all branches" is on).
+1. Drop branches with `NO_RUNS` only if *hide branches without runs* is on (default **off**, D21).
+2. Drop branches whose `lastActivity` is older than *hide idle after N days* (pinned branches are never dropped; `NO_RUNS` branches have no `lastActivity` and are not affected by this filter).
 3. Sort: pinned branches first, in the order they were pinned. Then the remaining branches by the chosen key:
    - `RECENT` (default): `lastActivity` descending, nulls last;
    - `STATUS`: RED, YELLOW, GREY, GREEN, then `RECENT`;
@@ -147,7 +147,7 @@ Each row is one test (or more). Fixtures are built with a small test DSL, not JS
 | A13 | Success + neutral | GREEN |
 | A14 | `stale`, `action_required`, `startup_failure`, `timed_out` | GREY, RED, RED, RED |
 | A15 | Unknown conclusion `"foo"` / unknown status `"bar"` | GREY, no exception |
-| A16 | No runs for the branch | NO_RUNS; hidden unless "show all branches" |
+| A16 | No runs for the branch | NO_RUNS, shown; sorted after branches with runs under `RECENT`; dropped when *hide branches without runs* is on |
 | A17 | Accurate mode: head SHA has no runs, an older SHA is green | NO_RUNS (old green must not leak) |
 | A18 | Fallback mode: newest run's SHA chosen, `headApproximate = true` | |
 | A19 | New red commit on top of a green one | RED |
