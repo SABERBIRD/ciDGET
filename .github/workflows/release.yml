@@ -4,6 +4,8 @@ on:
   push:
     tags:
       - "v*"
+  # Manual run: builds and verifies the signed release APK without publishing a release.
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -25,11 +27,13 @@ jobs:
           APKSIGNER="$(ls "$ANDROID_HOME"/build-tools/*/apksigner | sort -V | tail -1)"
           "$APKSIGNER" verify --print-certs app/build/outputs/apk/release/*.apk
       - name: Prepare release files
+        if: github.ref_type == 'tag'
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
           cp app/build/outputs/apk/release/*.apk "cidget-${VERSION}.apk"
           sha256sum "cidget-${VERSION}.apk" > "cidget-${VERSION}.apk.sha256"
       - name: Create GitHub Release
+        if: github.ref_type == 'tag'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
