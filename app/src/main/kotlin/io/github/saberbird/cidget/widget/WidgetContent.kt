@@ -164,7 +164,7 @@ private fun ListContent(
     val context = LocalContext.current
     val sp = display.fontSizeSp
     if (repoListOpen && tokenPresent && !tokenInvalid) {
-        RepoListView(context, repo, repoList, now, sp, picker)
+        RepoListView(context, repo, repoList, glyphs, now, sp, picker)
         return
     }
     Column(GlanceModifier.fillMaxSize().background(Palette.bg).padding(PADDING_DP.dp)) {
@@ -183,7 +183,6 @@ private fun ListContent(
                 val label = if (snapshot?.refreshing == true) "[...]" else "[${glyphs.refresh}]"
                 Text(label, style = style(Palette.dim, sp), modifier = GlanceModifier.clickable(actionRunCallback<RefreshCallback>()))
             }
-            Text(" [${glyphs.settings}]", style = style(Palette.dim, sp), modifier = GlanceModifier.clickable(picker))
         }
         val meta = metaLine(context, snapshot, tokenPresent, tokenInvalid, now)
         if (meta.isNotEmpty()) Text(meta, style = style(Palette.dim, sp), maxLines = 1)
@@ -210,7 +209,7 @@ private fun ListContent(
 
 /** The repo list (`ls`): terminal-style rows from the local cache; a tap picks the repo (D24). */
 @Composable
-private fun RepoListView(context: Context, current: String?, list: RepoList, now: Instant, sp: Int, settings: Action) {
+private fun RepoListView(context: Context, current: String?, list: RepoList, glyphs: Glyphs, now: Instant, sp: Int, settings: Action) {
     Column(GlanceModifier.fillMaxSize().background(Palette.bg).padding(PADDING_DP.dp)) {
         Row(GlanceModifier.fillMaxWidth()) {
             Text(
@@ -219,6 +218,7 @@ private fun RepoListView(context: Context, current: String?, list: RepoList, now
                 maxLines = 1,
                 modifier = GlanceModifier.defaultWeight(),
             )
+            Text("[${glyphs.settings}] ", style = style(Palette.dim, sp), modifier = GlanceModifier.clickable(settings))
             Text("[x]", style = style(Palette.dim, sp), modifier = GlanceModifier.clickable(actionRunCallback<CloseRepoListCallback>()))
         }
         val meta = buildList {

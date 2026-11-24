@@ -39,14 +39,14 @@ In approximate-head mode (D8 fallback) the glyph gets a `~` suffix in the status
 ## 2. Layout
 
 ```
-~/testING $ ci               [⟳] [⚙]    <- header: prompt (tap = repo list), refresh, settings
+~/testING $ ci                    [⟳]    <- header: prompt (tap = repo list), refresh
 5m ago · ! offline                        <- meta line (only when there is something to say, or always if height allows)
 ✗ red          #9  CI   3m  [⧉][↗]       <- rows (LazyColumn, scrolls)
 ● running      #8  CI   4m  [⧉][↗]
 ✓ main         #1  CI   9m  [⧉][↗]
 ```
 
-- **Header**: `~/{repo} $ ci` (repo name only, without owner; ellipsized if long) and, right-aligned, `[⟳]` (or `[...]` while a refresh of this repo is running) and `[⚙]` (settings, D22; `[set]` if the font lacks the glyph). No animation: RemoteViews cannot animate cheaply.
+- **Header**: `~/{repo} $ ci` (repo name only, without owner; ellipsized if long) and, right-aligned, `[⟳]` (or `[...]` while a refresh of this repo is running). No `[⚙]` in the main header (D27). No animation: RemoteViews cannot animate cheaply.
 - **Meta line** parts, joined with ` · ` and dropped from the right when they don't fit:
   1. age of data: `5m ago`. When older than the stale threshold (D13): `stale 2h`.
   2. the current error from GITHUB_API.md §5 (`! offline`, `! 401 token`, `! rate limit until 14:05`, …).
@@ -140,7 +140,7 @@ If more than 8 text segments would result, all non-status text columns use `fg` 
 | `[↗]` | Share | Same `ActionActivity`: `startActivity(Intent.createChooser(ACTION_SEND text/plain, null))`, then `finish()`. Text: `CI ✗ testING/main #412 CI: https://github.com/…`, using the Unicode glyph even if the widget uses brackets. |
 | `[⟳]` | Refresh this repo | `actionRunCallback<RefreshCallback>` → enqueue expedited unique work `refresh:{owner}/{repo}` with `ExistingWorkPolicy.KEEP`. Show `[...]` immediately by writing `refreshing = true` to the repo state. |
 | Header prompt | Repo list (D24) | `actionRunCallback<OpenRepoListCallback>`: sets the widget's `repoListOpen` flag (DataStore) and queues the unique worker `repolist`. The widget then shows the repo list instead of the meta line and rows. Without a token the tap opens settings. |
-| `[⚙]` | Settings (D22) | `actionStartActivity(WidgetConfigActivity)` (dialog theme) with the `appWidgetId`: the same activity the launcher opens from the widget's reconfigure menu (tokens, repo picker with an `owner/repo` field, columns, display, copy-from). |
+| `[⚙]` (repo list header) | Settings (D22, D27) | `actionStartActivity(WidgetConfigActivity)` (full-screen terminal theme, D26) with the `appWidgetId`: the same activity the launcher opens from the widget's reconfigure menu (tokens, repo picker with an `owner/repo` field, columns, display, copy-from). |
 | Repo row (list view) | Switch repo | `actionRunCallback<PickRepoCallback>` with the repo and token id: saves them in the widget's config, clears the flag, prunes snapshots, shows `[...]` and queues a refresh. |
 | `[x]` (list view) | Back | `actionRunCallback<CloseRepoListCallback>`: clears the flag. |
 | TINY widget | Open the representative run of the shown status | Same as a row. |
@@ -150,7 +150,7 @@ All `PendingIntent`s are immutable. Every `Intent` carries the `appWidgetId` and
 ### Repo list view (D24)
 
 ```
-~ $ ls repos                       [x]
+~ $ ls repos                  [⚙] [x]
 2m ago
 > me/ciDGET
   me/dotfiles
@@ -164,7 +164,7 @@ Terminal-style rows, the current repo marked `> ` in the prompt colour, archived
 - Each `appWidgetId` has its own `WidgetConfig` (ARCHITECTURE.md §4): repo, `useGlobalDefaults`, columns, font size, glyph style, theme, sort, pinned branches, filters, max rows, and the TINY source (worst-of-repo or pinned branch).
 - `useGlobalDefaults = true` (the default for a new widget): display settings come from the global defaults; editing them in the widget's settings switches the flag off.
 - The settings screens use the terminal look (D25): dark background, monospace, `[ button ]`, `[x]` toggles, `(*)` choices, `$ title` headers.
-- There is no launcher icon (D22). The configuration activity is the only settings UI: it is opened when the widget is added, from the widget's long-press "reconfigure" entry and from the `[⚙]` cell in the header (fallback for launchers without that entry). Tapping the repo name opens the in-widget repo list (D24), not settings. (`android:configure`, `widgetFeatures="reconfigurable|configuration_optional"`) offers: pick a repo, *copy settings from widget …* (a list of other widget instances by repo name), or keep the global defaults.
+- There is no launcher icon (D22). The configuration activity is the only settings UI: it is opened when the widget is added, from the widget's long-press "reconfigure" entry and from the `[⚙]` in the repo list header. Tapping the repo name opens the in-widget repo list (D24), not settings. (`android:configure`, `widgetFeatures="reconfigurable|configuration_optional"`) offers: pick a repo, *copy settings from widget …* (a list of other widget instances by repo name), or keep the global defaults.
 - When a widget is removed (`onDeleted`), delete its config. Repo caches that no widget references are deleted by the next refresh.
 
 ## 6. Provider XML

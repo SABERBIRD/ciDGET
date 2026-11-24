@@ -14,11 +14,11 @@ ciDGET reads your Actions statuses with a **fine-grained personal access token**
    - **Contents** → **Read-only** (needed to know the latest commit of each branch exactly; without it the widget still works but marks statuses with `~` as approximate)
    Leave everything else at **No access**.
 7. **Generate token** and copy it (`github_pat_…`). GitHub shows it only once.
-8. In ciDGET there is no app icon. Long-press the widget → **Reconfigure** (or tap the `[⚙]` in its header) → **Token** → **[ paste token from clipboard ]**. There is no input field: the app takes the token you copied on GitHub, checks it, saves it and clears the clipboard.
+8. In ciDGET there is no app icon. Long-press the widget → **Reconfigure** (or tap the repo name → `[⚙]`) → **Token** → **[ paste token from clipboard ]**. There is no input field: the app takes the token you copied on GitHub, checks it, saves it and clears the clipboard.
 9. **Several accounts or organizations:** a fine-grained token covers one owner, so create one token per owner and add each one the same way (**Token** → **Add a token**). Each widget uses the token that can see its repo; the repo list in the widget (tap the repo name) shows the repos of all tokens.
 
 ## Changing or removing it
 
 - **New repositories:** edit the token on GitHub (same page → the token → **Edit** → repository access). No change in the app is needed.
-- **Expired or revoked token** (`! 401 token` in the widget): create a new one and paste it in the widget settings (long-press the widget → **Reconfigure**, or tap `[⚙]` in its header → **Token** → **Replace** on that token).
+- **Expired or revoked token** (`! 401 token` in the widget): create a new one and paste it in the widget settings (long-press the widget → **Reconfigure**, or tap the repo name → `[⚙]` → **Token** → **Replace** on that token).
 - **Remove:** widget settings → **Token** → **Delete** next to the token. The app also deletes its cached data. To revoke the token itself, delete it on GitHub too.
