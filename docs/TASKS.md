@@ -104,5 +104,5 @@ Order: tasks within a stage can run in parallel where *Depends on* allows.
 
 | When | Action |
 |---|---|
-| Now | Make `testING` public (TESTING.md §3, V11). |
+| Now | Add **Contents: Read-only** to the `ciDGET` token (docs/user/TOKEN.md). |
 | After T7 | Install the debug APK and review the MVP. |

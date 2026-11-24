@@ -46,8 +46,10 @@ Two workflows (`CI`, `Lint`) run `.ci/run.sh`, which reads its mode for each wor
 | `new-commit` | green commit, then a newer `[skip ci]` commit | GREY NO_RUNS in accurate mode (old green must not leak) |
 | `feature/a-very-long-branch-name-to-test-truncation-in-narrow-widgets` | pass | GREEN, truncated |
 
-**Status (2026-11-24): blocked (V11).** The account's Actions minutes for private repos are used up, so all jobs fail in about 2 s and every branch is red. Private access has been verified (V1). The fix is to **make `testING` public**: public repos have free minutes. After that, re-run all workflows and push the second, `[skip ci]` commit to `new-commit`:
+**Status (2026-11-24): working.** `testING` is public now (Actions minutes are free); private access was verified before that (V1). All branches show their intended state; the `[skip ci]` commit is on `new-commit`.
 
-```sh
-git checkout new-commit && echo 2 >> .ci/branch && git commit -am "Newer commit without CI [skip ci]" && git push
-```
+Resetting scenarios:
+- `running` goes green after ~15 min. Use *Re-run all jobs* on its CI run to get yellow again.
+- `flaky` goes green after one re-run. Push any new commit to the branch to get a failing attempt 1 again.
+
+Observed: after a self-cancel, the job is `cancelled` a few seconds before the run's own `status` leaves `in_progress`. The widget shows yellow during that window, which is correct.

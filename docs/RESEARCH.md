@@ -48,6 +48,6 @@ The project owner runs the script with a fine-grained PAT limited to `SABERBIRD/
 | V9 | Character budget: at font 13 sp, scale 1.0 and 1.3, the computed `charsPerLine` fills the row without wrapping on a Pixel launcher at 2×1, 4×2 and 5×5. |
 | V10 | Copy from the widget works on API 31 (Toast shown) and API 33+ (system confirmation, no Toast); share opens the chooser; a row tap opens the run in the GitHub app when installed. |
 
-### V11: fixture (owner action needed)
+### V11: fixture — resolved
 
-GitHub Actions jobs in the private `SABERBIRD/testING` repository currently fail within 2 seconds, without logs or steps. This is the usual symptom of Actions minutes or billing being unavailable for private repositories on the account. Until it is fixed, every fixture branch is red instead of its intended state. See TESTING.md §3.
+GitHub Actions jobs in the private `SABERBIRD/testING` repository currently fail within 2 seconds, without logs or steps. This is the usual symptom of Actions minutes or billing being unavailable for private repositories on the account. Resolved on 2026-11-24 by making `testING` public. See TESTING.md §3.
