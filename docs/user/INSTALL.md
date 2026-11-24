@@ -2,6 +2,8 @@
 
 ciDGET is not on Google Play. You install the APK file from GitHub. Android 12 or newer is required.
 
+> **Install ciDGET only from <https://github.com/SABERBIRD/ciDGET/releases>.** The signing key is public, so an APK from anywhere else could be a fake that replaces the app and reads your token.
+
 1. On the phone, open <https://github.com/SABERBIRD/ciDGET/releases/latest>.
 2. Download `cidget-<version>.apk`.
 3. Open the downloaded file. If Android asks, allow **Install unknown apps** for your browser (or file manager), then tap **Install**.
@@ -10,7 +12,7 @@ ciDGET is not on Google Play. You install the APK file from GitHub. Android 12 o
 
 ## Updating
 
-Download the new APK from Releases and install it over the old one. Settings are kept. Updates only work if the APK is signed with the same key as the installed one.
+Download the new APK from Releases and install it over the old one. Settings are kept. All builds use the same signing key, so updates always install over the old version.
 
 ## Test builds
 

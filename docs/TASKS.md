@@ -10,8 +10,8 @@ Order: tasks within a stage can run in parallel where *Depends on* allows.
 
 ### T1. Project skeleton and CI
 - **Depends on:** –
-- **Do:** Gradle setup as in BUILD_AND_RELEASE.md §1 with modules `:core`, `:github`, `:app`. `build.yml` and `release.yml` as in §2. An empty Glance widget that renders `~/ $ ci`. `en` + `uk` string resources. `locales_config.xml`. `allowBackup=false`. Launcher activity = settings screen placeholder.
-- **Done when:** `./gradlew check assembleDebug` passes locally and in CI; the debug APK artifact is uploaded; a `v0.0.1-test` tag on a fork builds a release (unsigned is fine without secrets); the widget can be placed on an API 31 emulator.
+- **Do:** Gradle setup as in BUILD_AND_RELEASE.md §1 with modules `:core`, `:github`, `:app`. `build.yml` and `release.yml` as in §2. An empty Glance widget that renders `~/ $ ci`. `en` + `uk` string resources. `locales_config.xml`. `allowBackup=false`. Launcher activity = settings screen placeholder. Generate and commit the public signing key per BUILD_AND_RELEASE.md §1 and sign debug and release builds with it.
+- **Done when:** `./gradlew check assembleDebug` passes locally and in CI; the debug APK artifact is uploaded; a `v0.0.1-test` tag on a fork builds a signed release (`apksigner verify` passes); two consecutive debug APKs from CI install over each other without uninstalling; the widget can be placed on an API 31 emulator.
 
 ### T2. Core models and aggregation
 - **Depends on:** T1
@@ -106,5 +106,4 @@ Order: tasks within a stage can run in parallel where *Depends on* allows.
 |---|---|
 | Now | Fix Actions for private repos on the account, or decide to make `testING` public (TESTING.md §3, V11). |
 | Now / before T6 | Create a token for `testING` and run `bash tools/verify-token.sh`; send the output (it contains no secrets). |
-| Before the first release | Create the keystore and four secrets (BUILD_AND_RELEASE.md §3). |
 | After T7 | Install the debug APK and review the MVP. |

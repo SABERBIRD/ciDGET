@@ -8,23 +8,38 @@
 - Modules: `:core`, `:github` (`kotlin("jvm")`), `:app` (`com.android.application`). Compose is enabled only in `:app`.
 - Build types:
   - `debug`: `applicationIdSuffix = ".debug"`, `versionNameSuffix = "-debug"`. It installs next to the release build and its label is "ciDGET debug".
-  - `release`: `isMinifyEnabled = true`, `isShrinkResources = true`, signed from environment variables (below). If they are absent, the release build is unsigned and the build does not fail. That case is only for local builds.
+  - `release`: `isMinifyEnabled = true`, `isShrinkResources = true`.
+  - **Both** are signed with the same committed key (below).
 - `versionCode` = `GITHUB_RUN_NUMBER` env var if present, else 1. `versionName` = tag without the `v` (`v1.2.0` → `1.2.0`), else `0.0.0-dev`.
 - `./gradlew check` runs unit tests and Android lint, and must pass with no lint errors.
 
-Signing config, read from the environment:
+### Signing: public committed key (D14)
+
+The owner does not want to manage secrets. The signing key is therefore **committed to the repository** and is public on purpose:
+
+- File: `app/signing/cidget-public.jks`, alias `cidget`, store and key password `cidget-public`. The passwords are written in plain text in `app/build.gradle.kts`.
+- T1 generates it once and commits it:
+  ```sh
+  keytool -genkeypair -keystore app/signing/cidget-public.jks -alias cidget \
+    -keyalg RSA -keysize 4096 -validity 10000 -dname "CN=ciDGET public key" \
+    -storepass cidget-public -keypass cidget-public
+  ```
+- **Never regenerate or replace it.** A different key makes every installed copy refuse updates, so users would have to uninstall and lose the token and settings. Replacing it requires the owner's explicit decision and a note in DECISIONS.md.
+- Why this is acceptable: the key protects nothing secret. Its only purpose is that each new APK installs over the previous one. The remaining risk is that someone builds a fake APK with the same key and the user installs it from somewhere else. It would then inherit the app data, including the token, which is read-only. The user guide therefore says to install only from this repository's Releases page.
+- If the app is ever published to a store, switch to a private key kept in GitHub Secrets. Users then reinstall once.
 
 ```kotlin
 signingConfigs {
-    create("release") {
-        val ks = System.getenv("CIDGET_KEYSTORE_FILE")
-        if (ks != null) {
-            storeFile = file(ks)
-            storePassword = System.getenv("CIDGET_KEYSTORE_PASSWORD")
-            keyAlias = System.getenv("CIDGET_KEY_ALIAS")
-            keyPassword = System.getenv("CIDGET_KEY_PASSWORD")
-        }
+    create("cidget") {
+        storeFile = rootProject.file("app/signing/cidget-public.jks")
+        storePassword = "cidget-public"
+        keyAlias = "cidget"
+        keyPassword = "cidget-public"
     }
+}
+buildTypes {
+    getByName("debug") { signingConfig = signingConfigs.getByName("cidget") }
+    getByName("release") { signingConfig = signingConfigs.getByName("cidget") }
 }
 ```
 
@@ -40,38 +55,15 @@ signingConfigs {
 ### `.github/workflows/release.yml`: tags `v*`
 
 1. The same setup.
-2. Decode the keystore: `echo "$KEYSTORE_BASE64" | base64 -d > $RUNNER_TEMP/release.jks`.
-3. `./gradlew check assembleRelease` with the `CIDGET_*` env vars from secrets.
-4. Verify the signature: `apksigner verify --print-certs`.
-5. Rename to `cidget-<version>.apk`, write its SHA-256 to `cidget-<version>.apk.sha256`, then create a GitHub Release with both files (`gh release create "$GITHUB_REF_NAME" … --generate-notes`, `permissions: contents: write`).
+2. `./gradlew check assembleRelease`.
+3. Verify the signature: `apksigner verify --print-certs`.
+4. Rename to `cidget-<version>.apk`, write its SHA-256 to `cidget-<version>.apk.sha256`, then create a GitHub Release with both files (`gh release create "$GITHUB_REF_NAME" … --generate-notes`, `permissions: contents: write`).
+
+No repository secrets are needed.
 
 Pin third-party actions to a commit SHA, with the version in a comment.
 
-### Repository secrets
-
-| Secret | Content |
-|---|---|
-| `KEYSTORE_BASE64` | `base64 -w0 release.jks` |
-| `KEYSTORE_PASSWORD` | keystore password |
-| `KEY_ALIAS` | `cidget` |
-| `KEY_PASSWORD` | key password (can be the same as the keystore password) |
-
-## 3. Creating the signing key (once, by the owner)
-
-On any computer with Java (JDK) installed:
-
-```sh
-keytool -genkeypair -v -keystore release.jks -alias cidget \
-  -keyalg RSA -keysize 4096 -validity 10000 \
-  -dname "CN=ciDGET"
-base64 -w0 release.jks > release.jks.b64     # macOS: base64 -i release.jks -o release.jks.b64
-```
-
-Then on GitHub: *ciDGET → Settings → Secrets and variables → Actions → New repository secret*. Add the four secrets above, pasting the content of `release.jks.b64` as `KEYSTORE_BASE64`.
-
-**Keep `release.jks` and its passwords safe and offline** (for example in a password manager). If the key is lost, updates can't be installed over the existing app; you would have to uninstall it, which loses its settings. Never commit the keystore.
-
-## 4. Making a release
+## 3. Making a release
 
 ```sh
 git tag v0.1.0 && git push origin v0.1.0
