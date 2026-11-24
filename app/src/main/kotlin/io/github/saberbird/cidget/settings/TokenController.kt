@@ -13,26 +13,26 @@ sealed interface SaveResult {
     data class Failed(val error: ApiError) : SaveResult
 }
 
-/** Validates, saves, replaces and deletes the token (SECURITY.md rules 4 and 5). */
+/** Validates, saves, replaces and deletes tokens (SECURITY.md rules 4 and 5). */
 class TokenController(private val graph: AppGraph) {
     /** Checks [raw] with `GET /user/repos?per_page=1`; only a valid token is saved. */
-    suspend fun validateAndSave(raw: String): SaveResult {
+    suspend fun validateAndSave(raw: String, label: String, replaceId: String?): SaveResult {
         val token = raw.trim()
         if (token.isEmpty()) return SaveResult.Empty
         val probe = GitHubClient(graph.http.withToken(token))
         return when (val r = probe.listUserRepos(maxPages = 1, perPage = 1)) {
             is ApiResult.Ok -> {
-                graph.tokenStore.save(token, r.meta.tokenExpiresAt)
-                graph.onTokenChanged()
+                graph.tokenStore.add(token, label, r.meta.tokenExpiresAt, replaceId)
+                graph.onTokensChanged(removed = false)
                 SaveResult.Saved
             }
             is ApiResult.Err -> SaveResult.Failed(r.error)
         }
     }
 
-    /** Removes the token, the HTTP cache and the snapshots, then refreshes widgets. */
-    suspend fun delete() {
-        graph.tokenStore.delete()
-        graph.onTokenChanged()
+    /** Removes token [id], the HTTP cache and the snapshots, then refreshes widgets. */
+    suspend fun delete(id: String) {
+        graph.tokenStore.remove(id)
+        graph.onTokensChanged(removed = true)
     }
 }

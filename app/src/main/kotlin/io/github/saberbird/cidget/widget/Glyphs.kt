@@ -18,6 +18,7 @@ internal class Glyphs(private val hasGlyph: (String) -> Boolean) {
     val copy = g("⧉")
     val share = g("↗")
     val refresh = g("⟳")
+    val settings = g("⚙")
 
     fun forStatus(status: Status): String = when (status) {
         Status.RED -> red

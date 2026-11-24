@@ -27,6 +27,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import io.github.saberbird.cidget.R
@@ -73,7 +74,7 @@ internal fun MainScreen(
     appWidgetId: Int,
     config: WidgetConfig,
     global: DisplaySettings,
-    last4: String?,
+    tokenCount: Int,
     go: (Screen) -> Unit,
 ) {
     val scope = rememberCoroutineScope()
@@ -86,7 +87,7 @@ internal fun MainScreen(
         Text(stringResource(R.string.cfg_title), style = MaterialTheme.typography.titleLarge)
         Text(stringResource(R.string.cfg_repo, config.repo ?: stringResource(R.string.cfg_none)))
         FilledTonalButton(onClick = { go(Screen.Repo) }) { Text(stringResource(R.string.cfg_change_repo)) }
-        Text(if (last4 == null) stringResource(R.string.token_none) else stringResource(R.string.token_saved, last4))
+        Text(if (tokenCount == 0) stringResource(R.string.token_none) else pluralStringResource(R.plurals.token_count, tokenCount, tokenCount))
         OutlinedButton(onClick = { go(Screen.Token) }) { Text(stringResource(R.string.token_title)) }
         HorizontalDivider()
         Row(verticalAlignment = Alignment.CenterVertically) {

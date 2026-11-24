@@ -29,16 +29,18 @@ class TokenStoreTest {
 
     @Test fun roundTrip() {
         val store = TokenStore(file, keys)
-        store.save(fake, Instant.parse("2026-12-24T15:32:55Z"))
-        assertEquals(fake, store.usableToken())
+        val id = store.add(fake, "me", Instant.parse("2026-12-24T15:32:55Z"))
+        assertEquals(fake, store.usableToken(id))
         val reopened = TokenStore(file, keys)
-        assertEquals(fake, reopened.usableToken())
-        assertEquals("abcd", reopened.summary.value?.last4)
-        assertEquals(Instant.parse("2026-12-24T15:32:55Z"), reopened.summary.value?.expiresAt)
+        assertEquals(fake, reopened.usableToken(id))
+        val s = reopened.summaries.value.single()
+        assertEquals("abcd", s.last4)
+        assertEquals("me", s.label)
+        assertEquals(Instant.parse("2026-12-24T15:32:55Z"), s.expiresAt)
     }
 
     @Test fun fileDoesNotContainPlaintext() {
-        TokenStore(file, keys).save(fake, null)
+        TokenStore(file, keys).add(fake, "", null)
         assertFalse(String(file.readBytes(), Charsets.ISO_8859_1).contains("github_pat"))
         assertEquals(1, file.readBytes()[0].toInt())
         assertEquals(12, file.readBytes()[1].toInt())
@@ -46,52 +48,98 @@ class TokenStoreTest {
 
     @Test fun invalidStateHidesTokenFromRequests() {
         val store = TokenStore(file, keys)
-        store.save(fake, null)
-        store.markInvalid()
-        assertNull(store.usableToken())
-        assertEquals(TokenState.INVALID, store.summary.value?.state)
-        store.save("github_pat_TEST_new1", null)
-        assertEquals("github_pat_TEST_new1", store.usableToken())
+        val id = store.add(fake, "", null)
+        store.markInvalid(id)
+        assertNull(store.usableToken(id))
+        assertEquals(TokenState.INVALID, store.summaries.value.single().state)
+        store.add("github_pat_TEST_new1", "", null, replaceId = id)
+        assertEquals("github_pat_TEST_new1", store.usableToken(id))
+        assertEquals(1, store.summaries.value.size)
+    }
+
+    @Test fun severalTokensAreKeptAndResolvedById() {
+        val store = TokenStore(file, keys)
+        val a = store.add("github_pat_TEST_aaaa", "personal", null)
+        val b = store.add("github_pat_TEST_bbbb", "org", null)
+        assertEquals(2, store.summaries.value.size)
+        assertEquals("github_pat_TEST_aaaa", store.usableToken(a))
+        assertEquals("github_pat_TEST_bbbb", store.usableToken(b))
+        // Unknown or missing id falls back to the first OK token.
+        assertEquals("github_pat_TEST_aaaa", store.usableToken(null))
+        assertEquals("github_pat_TEST_aaaa", store.usableToken("gone"))
+        store.markInvalid(a)
+        assertEquals("github_pat_TEST_bbbb", store.usableToken(null))
+        assertNull(store.usableToken(a))
+        assertEquals(TokenState.INVALID, store.stateOf(a))
+        assertEquals(TokenState.OK, store.stateOf(b))
+    }
+
+    @Test fun sameValueIsNotAddedTwice() {
+        val store = TokenStore(file, keys)
+        val a = store.add(fake, "x", null)
+        assertEquals(a, store.add(fake, "", null))
+        assertEquals(1, store.summaries.value.size)
+        assertEquals("x", store.summaries.value.single().label)
+    }
+
+    @Test fun removingOneKeepsTheOthersAndTheLastRemovesFileAndKey() {
+        val store = TokenStore(file, keys)
+        val a = store.add("github_pat_TEST_aaaa", "", null)
+        val b = store.add("github_pat_TEST_bbbb", "", null)
+        store.remove(a)
+        assertEquals("github_pat_TEST_bbbb", TokenStore(file, keys).usableToken(b))
+        store.remove(b)
+        assertFalse(file.exists())
+        assertNull(keys.key)
+        assertFalse(store.hasToken())
+    }
+
+    @Test fun legacySingleTokenFileIsMigrated() {
+        val legacy = """{"token":"$fake","state":"OK"}"""
+        file.writeBytes(TokenCodec.encrypt(keys.getOrCreate(), legacy.toByteArray()))
+        val store = TokenStore(file, keys)
+        assertEquals(fake, store.usableToken(null))
+        assertEquals(1, store.summaries.value.size)
     }
 
     @Test fun corruptFileIsWipedAndTreatedAsNoToken() {
         val store = TokenStore(file, keys)
-        store.save(fake, null)
+        store.add(fake, "", null)
         val bytes = file.readBytes()
         bytes[bytes.size - 1] = (bytes[bytes.size - 1].toInt() xor 0x55).toByte()
         file.writeBytes(bytes)
-        assertNull(store.usableToken())
+        assertNull(store.usableToken(null))
         assertFalse(file.exists())
         assertTrue(keys.deletes > 0)
-        assertNull(store.summary.value)
-        store.save(fake, null)
-        assertEquals(fake, store.usableToken())
+        assertTrue(store.summaries.value.isEmpty())
+        val id = store.add(fake, "", null)
+        assertEquals(fake, store.usableToken(id))
     }
 
     @Test fun truncatedAndGarbageFilesAreRecovered() {
         for (garbage in listOf(byteArrayOf(), byteArrayOf(1), byteArrayOf(9, 9, 9, 9), ByteArray(40) { 7 })) {
             file.writeBytes(garbage)
             val store = TokenStore(file, keys)
-            assertNull(store.usableToken())
+            assertNull(store.usableToken(null))
             assertFalse(file.exists())
         }
     }
 
     @Test fun lostKeyIsRecovered() {
         val store = TokenStore(file, keys)
-        store.save(fake, null)
+        store.add(fake, "", null)
         keys.key = null // simulates a key that did not survive
-        assertNull(store.usableToken())
+        assertNull(store.usableToken(null))
         assertFalse(file.exists())
     }
 
     @Test fun deleteRemovesFileAndKey() {
         val store = TokenStore(file, keys)
-        store.save(fake, null)
+        store.add(fake, "", null)
         store.delete()
         assertFalse(file.exists())
         assertNull(keys.key)
-        assertNull(store.summary.value)
+        assertTrue(store.summaries.value.isEmpty())
         assertNotNull(dir)
     }
 }

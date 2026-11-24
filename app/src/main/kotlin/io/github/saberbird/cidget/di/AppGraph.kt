@@ -6,12 +6,15 @@ import android.util.Log
 import io.github.saberbird.cidget.data.KeystoreKeyProvider
 import io.github.saberbird.cidget.data.RefreshRepository
 import io.github.saberbird.cidget.data.RepoFetcher
+import io.github.saberbird.cidget.data.RepoListRepository
+import io.github.saberbird.cidget.data.RepoListStore
 import io.github.saberbird.cidget.data.SettingsRepository
 import io.github.saberbird.cidget.data.SnapshotStore
 import io.github.saberbird.cidget.widget.CidgetWidget
 import androidx.glance.appwidget.updateAll
 import kotlinx.datetime.Clock
 import io.github.saberbird.cidget.github.fetchRepoState
+import io.github.saberbird.cidget.github.withTokenProvider
 import io.github.saberbird.cidget.work.RefreshScheduler
 import io.github.saberbird.cidget.data.TokenStore
 import io.github.saberbird.cidget.github.GitHubClient
@@ -28,13 +31,19 @@ class AppGraph(val app: Application) {
     val http: OkHttpClient = createHttpClient(
         cacheDir = File(app.cacheDir, "http"),
         userAgent = "ciDGET/${versionName()}",
-        tokenProvider = tokenStore::usableToken,
+        tokenProvider = { tokenStore.usableToken(null) },
     )
 
     private val debuggable = app.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0
 
-    /** The API client. In debug builds it logs `GET path -> code` lines only (never headers or bodies). */
-    val github: GitHubClient = GitHubClient(http, log = if (debuggable) { line -> Log.d("cidget", line) } else null)
+    private val log: ((String) -> Unit)? = if (debuggable) { line -> Log.d("cidget", line) } else null
+
+    /**
+     * API client for token [tokenId] (null = the default token; D23). In debug builds it logs
+     * `GET path -> code` lines only (never headers or bodies). The token is read per request.
+     */
+    fun githubFor(tokenId: String?): GitHubClient =
+        GitHubClient(http.withTokenProvider { tokenStore.usableToken(tokenId) }, log = log)
 
     val snapshots: SnapshotStore = SnapshotStore(File(app.filesDir, "snapshots"))
 
@@ -46,10 +55,39 @@ class AppGraph(val app: Application) {
     val refresh: RefreshRepository = RefreshRepository(
         tokens = tokenStore,
         snapshots = snapshots,
-        fetcher = RepoFetcher { owner, repo, s -> github.fetchRepoState(owner, repo, s) },
+        fetcher = RepoFetcher { tokenId, owner, repo, s -> githubFor(tokenId).fetchRepoState(owner, repo, s) },
+        tokenIdFor = settings::tokenIdForRepo,
         clock = Clock.System,
         onChanged = ::updateWidgets,
     )
+
+    val repoListStore: RepoListStore = RepoListStore(File(app.filesDir, "repos.json"))
+
+    val repoLists: RepoListRepository = RepoListRepository(
+        tokens = tokenStore,
+        store = repoListStore,
+        listFor = { tokenId -> githubFor(tokenId).listUserRepos() },
+        clock = Clock.System,
+        onChanged = ::updateWidgets,
+    )
+
+    /** Shows "loading" in the widget's repo list at once, then queues the worker that refreshes it. */
+    suspend fun requestRepoList() {
+        repoLists.prepare()
+        RefreshScheduler.refreshRepoList(app)
+    }
+
+    /**
+     * Picks [repo] (seen by [tokenId]) for widget [appWidgetId], closes its repo list, prunes snapshots and
+     * queues a refresh of the repo.
+     */
+    suspend fun pickRepo(appWidgetId: Int, repo: String, tokenId: String?) {
+        settings.setWidgetRepo(appWidgetId, repo, tokenId)
+        settings.setRepoListOpen(appWidgetId, false)
+        snapshots.deleteExcept(settings.reposInUse())
+        updateWidgets()
+        requestRefresh(repo)
+    }
 
     /** Manual refresh: shows `[...]` immediately, then queues the work. */
     suspend fun requestRefresh(repo: String) {
@@ -62,12 +100,21 @@ class AppGraph(val app: Application) {
     /** Drops cached API responses; they may hold private repository data. */
     suspend fun evictHttpCache() = withContext(Dispatchers.IO) { runCatching { http.cache?.evictAll() }; Unit }
 
-    /** Called after the token was saved, replaced or deleted. Clears private data, redraws widgets and refreshes. */
-    suspend fun onTokenChanged() {
+    /**
+     * Called after a token was added, replaced or removed. Clears cached private data, redraws widgets and
+     * refreshes. When a token was [removed] all snapshots go too, because they may hold its private data.
+     */
+    suspend fun onTokensChanged(removed: Boolean) {
         evictHttpCache()
-        snapshots.deleteAll()
+        if (removed) {
+            snapshots.deleteAll()
+            repoListStore.clear()
+        }
         updateWidgets()
-        if (tokenStore.hasToken()) settings.reposInUse().forEach(::refreshNow)
+        if (tokenStore.hasToken()) {
+            settings.reposInUse().forEach(::refreshNow)
+            RefreshScheduler.refreshRepoList(app)
+        }
     }
 
     private fun versionName(): String =

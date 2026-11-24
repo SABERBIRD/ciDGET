@@ -5,7 +5,6 @@
     <string name="widget_description">CI status of the branches of one repository</string>
     <string name="token_title">Token</string>
     <string name="token_none">No token saved</string>
-    <string name="token_saved">Saved token …%1$s</string>
     <string name="token_expires">Expires %1$s</string>
     <string name="token_no_expiry">No expiry date</string>
     <string name="token_invalid">The token was revoked or has expired. Create a new one and paste it here.</string>
@@ -90,4 +89,17 @@
     <string name="disp_tiny_worst">Worst status of the repo</string>
     <string name="disp_tiny_pinned">First pinned branch</string>
     <string name="copy_none">No other widgets with a repository.</string>
+    <string name="token_unnamed">Token</string>
+    <string name="token_item">%1$s …%2$s</string>
+    <string name="token_add_title">Add a token</string>
+    <string name="token_replace_title">Replace the token</string>
+    <string name="token_label_field">Name (optional, e.g. account or organization)</string>
+    <string name="token_replace">Replace</string>
+    <string name="token_cancel">Cancel</string>
+    <string name="w_ls_prompt">~ $ ls repos</string>
+    <string name="w_no_repos">no repos</string>
+    <plurals name="token_count">
+        <item quantity="one">%d token saved</item>
+        <item quantity="other">%d tokens saved</item>
+    </plurals>
 </resources>

@@ -25,7 +25,7 @@ Three modules is deliberate: enough to keep the pure logic testable and free of 
 | `widget.config` | configuration activity, `RepoPickerActivity` |
 | `action` | `ActionActivity` (copy/share trampoline) |
 | `settings` | Compose settings screens: token, defaults, columns, refresh, about |
-| `data` | `TokenStore`, `SettingsRepository`, `SnapshotStore`, `RefreshRepository` |
+| `data` | `TokenStore`, `SettingsRepository`, `SnapshotStore`, `RefreshRepository`, `RepoListStore`/`RepoListRepository` (cached pickable repos, D24) |
 | `work` | `RefreshWorker`, `RefreshScheduler` |
 | `di` | `AppGraph`: a single object created in `Application.onCreate` that builds the OkHttp client, stores and repositories |
 
@@ -75,9 +75,11 @@ Worker rules:
 
 | Store | Tech | Contents |
 |---|---|---|
-| `TokenStore` | file `files/token.bin` (IV + AES-GCM ciphertext of a small JSON payload), key in Android Keystore | the PAT, its state (`OK`, `INVALID`), expiry date |
+| `TokenStore` | file `files/token.bin` (IV + AES-GCM ciphertext of a small JSON payload), key in Android Keystore | the PATs (D23: id, label, token, state `OK`/`INVALID`, expiry) |
 | `SettingsRepository` | Preferences/Proto DataStore `settings` (one instance) | global defaults, per-widget `WidgetConfig` map keyed by `appWidgetId`, refresh settings, glyph availability cache |
 | `SnapshotStore` | one JSON file per repo in `files/snapshots/{owner}__{repo}.json` (kotlinx.serialization, atomic write via temp + rename) | `RepoSnapshot` |
+| `RepoListStore` | one JSON file `files/repos.json` (atomic write) | pickable repos of all tokens with the id of the token that sees each; read by the widget, refreshed by `RepoListWorker` (D24) |
+| `SettingsRepository` flag | `repo_list_open_{appWidgetId}` in the same DataStore | whether a widget shows its repo list |
 | HTTP cache | OkHttp `Cache` in `cacheDir/http` | ETag'd responses |
 
 ```kotlin

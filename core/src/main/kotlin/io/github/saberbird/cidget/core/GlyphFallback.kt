@@ -11,6 +11,7 @@ public object GlyphFallback {
         "⧉" to "cp",
         "↗" to "sh",
         "⟳" to "r",
+        "⚙" to "set",
         "…" to "~",
     )
 

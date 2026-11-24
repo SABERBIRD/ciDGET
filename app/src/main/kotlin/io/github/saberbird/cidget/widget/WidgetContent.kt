@@ -12,6 +12,7 @@ import androidx.glance.GlanceModifier
 import androidx.glance.LocalContext
 import androidx.glance.LocalSize
 import androidx.glance.action.Action
+import androidx.glance.action.actionParametersOf
 import androidx.glance.action.clickable
 import androidx.glance.appwidget.action.actionRunCallback
 import androidx.glance.appwidget.action.actionStartActivity
@@ -44,6 +45,8 @@ import io.github.saberbird.cidget.core.rowSegments
 import io.github.saberbird.cidget.core.rowUrl
 import io.github.saberbird.cidget.core.selectBranches
 import io.github.saberbird.cidget.core.shareText
+import io.github.saberbird.cidget.core.formatAge
+import io.github.saberbird.cidget.data.RepoList
 import io.github.saberbird.cidget.data.RepoSnapshot
 import io.github.saberbird.cidget.widget.config.WidgetConfigActivity
 import kotlinx.datetime.Instant
@@ -78,6 +81,8 @@ internal fun WidgetContent(
     now: Instant,
     glyphs: Glyphs,
     display: DisplaySettings,
+    repoListOpen: Boolean,
+    repoList: RepoList,
 ) {
     val context = LocalContext.current
     val size = LocalSize.current
@@ -92,7 +97,10 @@ internal fun WidgetContent(
     if (tiny) {
         TinyContent(appWidgetId, repo, snapshot, tokenPresent, tokenInvalid, now, glyphs, display, picker, size.width.value, size.height.value)
     } else {
-        ListContent(appWidgetId, repo, snapshot, tokenPresent, tokenInvalid, now, glyphs, display, picker, size.width.value, fontScale)
+        ListContent(
+            appWidgetId, repo, snapshot, tokenPresent, tokenInvalid, now, glyphs, display, picker,
+            size.width.value, fontScale, repoListOpen, repoList,
+        )
     }
 }
 
@@ -150,22 +158,32 @@ private fun ListContent(
     picker: Action,
     widthDp: Float,
     fontScale: Float,
+    repoListOpen: Boolean,
+    repoList: RepoList,
 ) {
     val context = LocalContext.current
     val sp = display.fontSizeSp
+    if (repoListOpen && tokenPresent && !tokenInvalid) {
+        RepoListView(context, repo, repoList, now, sp, picker)
+        return
+    }
     Column(GlanceModifier.fillMaxSize().background(Palette.bg).padding(PADDING_DP.dp)) {
         Row(GlanceModifier.fillMaxWidth()) {
             val name = repo?.substringAfter('/') ?: ""
+            // A tap on the repo name swaps the content for the repo list (D24). Without a token it opens settings.
             Text(
                 text = "~/$name $ ci",
                 style = style(Palette.prompt, sp),
                 maxLines = 1,
-                modifier = GlanceModifier.defaultWeight().clickable(picker),
+                modifier = GlanceModifier.defaultWeight().clickable(
+                    if (tokenPresent && !tokenInvalid) actionRunCallback<OpenRepoListCallback>() else picker,
+                ),
             )
             if (repo != null && tokenPresent) {
                 val label = if (snapshot?.refreshing == true) "[...]" else "[${glyphs.refresh}]"
                 Text(label, style = style(Palette.dim, sp), modifier = GlanceModifier.clickable(actionRunCallback<RefreshCallback>()))
             }
+            Text(" [${glyphs.settings}]", style = style(Palette.dim, sp), modifier = GlanceModifier.clickable(picker))
         }
         val meta = metaLine(context, snapshot, tokenPresent, tokenInvalid, now)
         if (meta.isNotEmpty()) Text(meta, style = style(Palette.dim, sp), maxLines = 1)
@@ -186,6 +204,55 @@ private fun ListContent(
                 style = style(Palette.dim, sp),
             )
             else -> Rows(context, appWidgetId, repo, snapshot, now, glyphs, display, widthDp, fontScale)
+        }
+    }
+}
+
+/** The repo list (`ls`): terminal-style rows from the local cache; a tap picks the repo (D24). */
+@Composable
+private fun RepoListView(context: Context, current: String?, list: RepoList, now: Instant, sp: Int, settings: Action) {
+    Column(GlanceModifier.fillMaxSize().background(Palette.bg).padding(PADDING_DP.dp)) {
+        Row(GlanceModifier.fillMaxWidth()) {
+            Text(
+                text = context.getString(R.string.w_ls_prompt),
+                style = style(Palette.prompt, sp),
+                maxLines = 1,
+                modifier = GlanceModifier.defaultWeight(),
+            )
+            Text("[x]", style = style(Palette.dim, sp), modifier = GlanceModifier.clickable(actionRunCallback<CloseRepoListCallback>()))
+        }
+        val meta = buildList {
+            list.fetchedAt?.let { add(context.getString(R.string.w_age_ago, formatAge(it, now))) }
+            if (list.refreshing) add("[...]")
+            list.error?.let { add(it.widgetText(context)) }
+        }.joinToString(" · ")
+        if (meta.isNotEmpty()) Text(meta, style = style(Palette.dim, sp), maxLines = 1)
+        when {
+            list.repos.isEmpty() -> Text(
+                context.getString(if (list.refreshing || list.fetchedAt == null && list.error == null) R.string.w_loading else R.string.w_no_repos),
+                style = style(Palette.dim, sp),
+            )
+            else -> LazyColumn(GlanceModifier.fillMaxSize()) {
+                items(list.repos.indices.toList()) { i ->
+                    val r = list.repos[i]
+                    val mark = if (r.fullName == current) "> " else "  "
+                    val color = when {
+                        r.fullName == current -> Palette.prompt
+                        r.archived -> Palette.dim
+                        else -> Palette.fg
+                    }
+                    Text(
+                        text = mark + r.fullName,
+                        style = style(color, sp),
+                        maxLines = 1,
+                        modifier = GlanceModifier.fillMaxWidth().clickable(
+                            actionRunCallback<PickRepoCallback>(
+                                actionParametersOf(PickRepoCallback.REPO_KEY to r.fullName, PickRepoCallback.TOKEN_KEY to r.tokenId),
+                            ),
+                        ),
+                    )
+                }
+            }
         }
     }
 }

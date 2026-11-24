@@ -5,68 +5,126 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.datetime.Instant
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.jsonObject
 import java.io.File
+import java.util.UUID
 
-/** Whether the saved token may be used. `INVALID` after a 401, until the token is replaced. */
+/** Whether a saved token may be used. `INVALID` after a 401, until the token is replaced. */
 @Serializable
 enum class TokenState { OK, INVALID }
 
+/** One saved token (D23). [label] is a free name such as the account or organization; it is not a secret. */
 @Serializable
-private data class TokenPayload(val token: String, val state: TokenState, val expiresAt: Instant? = null)
+private data class SavedToken(
+    val id: String,
+    val label: String,
+    val token: String,
+    val state: TokenState = TokenState.OK,
+    val expiresAt: Instant? = null,
+)
 
-/** What the UI may know about the token: never the token itself, only its last 4 characters. */
-data class TokenSummary(val last4: String, val expiresAt: Instant?, val state: TokenState)
+@Serializable
+private data class TokenPayload(val tokens: List<SavedToken> = emptyList())
+
+/** The pre-D23 single-token payload; still readable so an update keeps the token. */
+@Serializable
+private data class LegacyPayload(val token: String, val state: TokenState, val expiresAt: Instant? = null)
+
+/** What the UI may know about a token: never the token itself, only its last 4 characters. */
+data class TokenSummary(val id: String, val label: String, val last4: String, val expiresAt: Instant?, val state: TokenState)
 
 /**
- * The encrypted token file (SECURITY.md). The plaintext exists only inside the methods below and in the
- * caller's local variable; nothing here logs it or puts it in an exception. If the file cannot be
- * decrypted, the file and the key are deleted and the state becomes "no token".
+ * The encrypted token file (SECURITY.md) holding one or more tokens. The plaintext exists only inside the
+ * methods below and in the caller's local variable; nothing here logs it or puts it in an exception. If the
+ * file cannot be decrypted, the file and the key are deleted and the state becomes "no tokens".
  */
 class TokenStore(
     private val file: File,
     private val keys: TokenKeyProvider,
 ) {
     private val lock = Any()
-    private val _summary = MutableStateFlow<TokenSummary?>(null)
+    private val json = Json { ignoreUnknownKeys = true }
+    private val _summaries = MutableStateFlow<List<TokenSummary>>(emptyList())
 
-    /** Current summary, or null when there is no token. */
-    val summary: StateFlow<TokenSummary?> = _summary
+    /** Summaries of all saved tokens, in the order they were added. */
+    val summaries: StateFlow<List<TokenSummary>> = _summaries
 
     init {
         publish(read())
     }
 
-    /** The token if one is saved and not `INVALID`; this is what API requests use. */
-    fun usableToken(): String? = synchronized(lock) { read() }?.takeIf { it.state == TokenState.OK }?.token
+    /** True when at least one token is saved, whatever its state. */
+    fun hasToken(): Boolean = _summaries.value.isNotEmpty()
 
-    /** True when a token exists, whatever its state. */
-    fun hasToken(): Boolean = _summary.value != null
-
-    /** Saves [token] as `OK`, replacing any previous one. */
-    fun save(token: String, expiresAt: Instant?) = synchronized(lock) {
-        write(TokenPayload(token, TokenState.OK, expiresAt))
+    /**
+     * Id of the token a request for [id] uses: [id] if it exists, otherwise (no id, or the token was deleted)
+     * the first `OK` token, otherwise the first token. Null when nothing is saved.
+     */
+    fun resolveId(id: String?): String? {
+        val list = _summaries.value
+        return (list.firstOrNull { it.id == id } ?: list.firstOrNull { it.state == TokenState.OK } ?: list.firstOrNull())?.id
     }
 
-    /** Marks the saved token `INVALID` (after a 401). */
-    fun markInvalid() = synchronized(lock) {
-        read()?.let { write(it.copy(state = TokenState.INVALID)) }
-        Unit
+    /** State of the token [resolveId] picks, or null when nothing is saved. */
+    fun stateOf(id: String?): TokenState? = resolveId(id)?.let { r -> _summaries.value.first { it.id == r }.state }
+
+    /** The plaintext of the token for [id] (see [resolveId]) if it is not `INVALID`; this is what API requests use. */
+    fun usableToken(id: String?): String? = synchronized(lock) {
+        val resolved = resolveId(id) ?: return null
+        read().tokens.firstOrNull { it.id == resolved }?.takeIf { it.state == TokenState.OK }?.token
+    }
+
+    /**
+     * Saves [token] as `OK`. With [replaceId] that token's value is replaced (id and position kept); otherwise
+     * a token with the same value is refreshed, or a new one is appended. Returns the token's id.
+     */
+    fun add(token: String, label: String, expiresAt: Instant?, replaceId: String? = null): String = synchronized(lock) {
+        val payload = read()
+        val index = payload.tokens.indexOfFirst { it.id == replaceId }.takeIf { it >= 0 }
+            ?: payload.tokens.indexOfFirst { it.token == token }.takeIf { it >= 0 }
+        val list = payload.tokens.toMutableList()
+        val id: String
+        if (index != null) {
+            id = list[index].id
+            list[index] = SavedToken(id, label.trim().ifEmpty { list[index].label }, token, TokenState.OK, expiresAt)
+        } else {
+            id = UUID.randomUUID().toString()
+            list += SavedToken(id, label.trim(), token, TokenState.OK, expiresAt)
+        }
+        write(TokenPayload(list))
+        id
+    }
+
+    /** Marks token [id] `INVALID` (after a 401). */
+    fun markInvalid(id: String?) = synchronized(lock) {
+        val resolved = resolveId(id) ?: return@synchronized
+        val payload = read()
+        write(TokenPayload(payload.tokens.map { if (it.id == resolved) it.copy(state = TokenState.INVALID) else it }))
     }
 
     /** Updates the expiry date seen in a response header. */
-    fun updateExpiry(expiresAt: Instant?) = synchronized(lock) {
-        read()?.takeIf { it.expiresAt != expiresAt }?.let { write(it.copy(expiresAt = expiresAt)) }
-        Unit
+    fun updateExpiry(id: String?, expiresAt: Instant?) = synchronized(lock) {
+        val resolved = resolveId(id) ?: return@synchronized
+        val payload = read()
+        if (payload.tokens.firstOrNull { it.id == resolved }?.expiresAt == expiresAt) return@synchronized
+        write(TokenPayload(payload.tokens.map { if (it.id == resolved) it.copy(expiresAt = expiresAt) else it }))
     }
 
-    /** Deletes the file and the key. */
+    /** Deletes token [id]; the file and key go when it was the last one. */
+    fun remove(id: String) = synchronized(lock) {
+        val rest = read().tokens.filter { it.id != id }
+        if (rest.isEmpty()) delete() else write(TokenPayload(rest))
+    }
+
+    /** Deletes every token, the file and the key. */
     fun delete() = synchronized(lock) {
         wipe()
-        publish(null)
+        publish(TokenPayload())
     }
 
     private fun write(payload: TokenPayload) {
-        val bytes = Json.encodeToString(TokenPayload.serializer(), payload).toByteArray(Charsets.UTF_8)
+        val bytes = json.encodeToString(TokenPayload.serializer(), payload).toByteArray(Charsets.UTF_8)
         val blob = TokenCodec.encrypt(keys.getOrCreate(), bytes)
         val tmp = File(file.parentFile, file.name + ".tmp")
         tmp.writeBytes(blob)
@@ -77,16 +135,22 @@ class TokenStore(
         publish(payload)
     }
 
-    private fun read(): TokenPayload? {
-        if (!file.exists()) return null
+    private fun read(): TokenPayload {
+        if (!file.exists()) return TokenPayload()
         return try {
-            val plain = TokenCodec.decrypt(keys.getOrCreate(), file.readBytes())
-            Json.decodeFromString(TokenPayload.serializer(), plain.toString(Charsets.UTF_8))
+            val text = TokenCodec.decrypt(keys.getOrCreate(), file.readBytes()).toString(Charsets.UTF_8)
+            val obj: JsonObject = json.parseToJsonElement(text).jsonObject
+            if ("tokens" in obj) {
+                json.decodeFromString(TokenPayload.serializer(), text)
+            } else {
+                val legacy = json.decodeFromString(LegacyPayload.serializer(), text)
+                TokenPayload(listOf(SavedToken(UUID.randomUUID().toString(), "", legacy.token, legacy.state, legacy.expiresAt)))
+            }
         } catch (_: Exception) {
             // Corrupt file, lost key or bad tag: start clean. Never include the cause; it may hold data.
             wipe()
-            publish(null)
-            null
+            publish(TokenPayload())
+            TokenPayload()
         }
     }
 
@@ -96,7 +160,7 @@ class TokenStore(
         keys.delete()
     }
 
-    private fun publish(payload: TokenPayload?) {
-        _summary.value = payload?.let { TokenSummary(it.token.takeLast(4), it.expiresAt, it.state) }
+    private fun publish(payload: TokenPayload) {
+        _summaries.value = payload.tokens.map { TokenSummary(it.id, it.label, it.token.takeLast(4), it.expiresAt, it.state) }
     }
 }

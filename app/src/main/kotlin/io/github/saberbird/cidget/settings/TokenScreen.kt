@@ -10,6 +10,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -40,18 +41,21 @@ import java.time.format.FormatStyle
 private const val TOKEN_HELP_URL = "https://github.com/SABERBIRD/ciDGET/blob/main/docs/user/TOKEN.md"
 
 /**
- * Settings → Token: paste, show/hide, validate and save, replace, delete. The pasted text lives only in
- * this screen's `remember` state and is cleared after a successful save.
+ * Settings → Tokens (D23): the saved tokens (label, last 4, expiry, state) each with Replace and Delete, and a
+ * form to add one. The pasted text lives only in this screen's `remember` state and is cleared after a
+ * successful save.
  *
  * @param showContentsHint true when the branch list of some repo was forbidden (token lacks Contents: read).
  */
 @Composable
 fun TokenScreen(graph: AppGraph, showContentsHint: Boolean, modifier: Modifier = Modifier) {
     val controller = remember { TokenController(graph) }
-    val summary by graph.tokenStore.summary.collectAsState()
+    val tokens by graph.tokenStore.summaries.collectAsState()
     val scope = rememberCoroutineScope()
     val uriHandler = LocalUriHandler.current
     var input by remember { mutableStateOf("") }
+    var label by remember { mutableStateOf("") }
+    var replaceId by remember { mutableStateOf<String?>(null) }
     var visible by remember { mutableStateOf(false) }
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<ErrorText?>(null) }
@@ -62,12 +66,11 @@ fun TokenScreen(graph: AppGraph, showContentsHint: Boolean, modifier: Modifier =
         modifier = modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        val s = summary
-        if (s == null) {
-            Text(stringResource(R.string.token_none), style = MaterialTheme.typography.titleMedium)
-        } else {
-            Text(stringResource(R.string.token_saved, s.last4), style = MaterialTheme.typography.titleMedium)
-            val exp = s.expiresAt
+        if (tokens.isEmpty()) Text(stringResource(R.string.token_none), style = MaterialTheme.typography.titleMedium)
+        tokens.forEach { t ->
+            val name = t.label.ifEmpty { stringResource(R.string.token_unnamed) }
+            Text(stringResource(R.string.token_item, name, t.last4), style = MaterialTheme.typography.titleMedium)
+            val exp = t.expiresAt
             Text(
                 if (exp == null) {
                     stringResource(R.string.token_no_expiry)
@@ -77,12 +80,43 @@ fun TokenScreen(graph: AppGraph, showContentsHint: Boolean, modifier: Modifier =
                     stringResource(R.string.token_expires, date)
                 },
             )
-            if (s.state == TokenState.INVALID) {
+            if (t.state == TokenState.INVALID) {
                 Text(stringResource(R.string.token_invalid), color = MaterialTheme.colorScheme.error)
             }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(
+                    enabled = !busy,
+                    onClick = { replaceId = t.id; label = t.label; input = ""; error = null; savedNow = false },
+                ) { Text(stringResource(R.string.token_replace)) }
+                OutlinedButton(
+                    enabled = !busy,
+                    onClick = {
+                        busy = true
+                        scope.launch {
+                            controller.delete(t.id)
+                            if (replaceId == t.id) { replaceId = null; label = ""; input = "" }
+                            savedNow = false
+                            busy = false
+                        }
+                    },
+                ) { Text(stringResource(R.string.token_delete)) }
+            }
+            HorizontalDivider()
         }
         if (showContentsHint) Text(stringResource(R.string.token_contents_hint))
 
+        Text(
+            stringResource(if (replaceId == null) R.string.token_add_title else R.string.token_replace_title),
+            style = MaterialTheme.typography.titleMedium,
+        )
+        OutlinedTextField(
+            value = label,
+            onValueChange = { label = it },
+            label = { Text(stringResource(R.string.token_label_field)) },
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth(),
+            enabled = !busy,
+        )
         OutlinedTextField(
             value = input,
             onValueChange = { input = it; error = null; emptyError = false; savedNow = false },
@@ -110,8 +144,8 @@ fun TokenScreen(graph: AppGraph, showContentsHint: Boolean, modifier: Modifier =
                 onClick = {
                     busy = true
                     scope.launch {
-                        when (val r = controller.validateAndSave(input)) {
-                            SaveResult.Saved -> { input = ""; savedNow = true }
+                        when (val r = controller.validateAndSave(input, label, replaceId)) {
+                            SaveResult.Saved -> { input = ""; label = ""; replaceId = null; savedNow = true }
                             SaveResult.Empty -> emptyError = true
                             is SaveResult.Failed -> error = r.error.toErrorText()
                         }
@@ -119,14 +153,11 @@ fun TokenScreen(graph: AppGraph, showContentsHint: Boolean, modifier: Modifier =
                     }
                 },
             ) { Text(stringResource(R.string.token_save)) }
-            if (summary != null) {
+            if (replaceId != null) {
                 OutlinedButton(
                     enabled = !busy,
-                    onClick = {
-                        busy = true
-                        scope.launch { controller.delete(); savedNow = false; busy = false }
-                    },
-                ) { Text(stringResource(R.string.token_delete)) }
+                    onClick = { replaceId = null; label = ""; input = ""; error = null },
+                ) { Text(stringResource(R.string.token_cancel)) }
             }
         }
         TextButton(onClick = { uriHandler.openUri(TOKEN_HELP_URL) }) {

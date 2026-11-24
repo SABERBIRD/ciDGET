@@ -3,7 +3,6 @@
     <string name="widget_description">Статус CI гілок одного репозиторію</string>
     <string name="token_title">Токен</string>
     <string name="token_none">Токен не збережено</string>
-    <string name="token_saved">Збережений токен …%1$s</string>
     <string name="token_expires">Спливає %1$s</string>
     <string name="token_no_expiry">Без дати завершення</string>
     <string name="token_invalid">Токен відкликано або він застарів. Створіть новий і вставте тут.</string>
@@ -88,4 +87,19 @@
     <string name="disp_tiny_worst">Найгірший статус репозиторію</string>
     <string name="disp_tiny_pinned">Першу закріплену гілку</string>
     <string name="copy_none">Немає інших віджетів з репозиторієм.</string>
+    <string name="token_unnamed">Токен</string>
+    <string name="token_item">%1$s …%2$s</string>
+    <string name="token_add_title">Додати токен</string>
+    <string name="token_replace_title">Замінити токен</string>
+    <string name="token_label_field">Назва (необовʼязково, напр. акаунт чи організація)</string>
+    <string name="token_replace">Замінити</string>
+    <string name="token_cancel">Скасувати</string>
+    <string name="w_ls_prompt">~ $ ls repos</string>
+    <string name="w_no_repos">немає репозиторіїв</string>
+    <plurals name="token_count">
+        <item quantity="one">%d токен збережено</item>
+        <item quantity="few">%d токени збережено</item>
+        <item quantity="many">%d токенів збережено</item>
+        <item quantity="other">%d токена збережено</item>
+    </plurals>
 </resources>

@@ -29,7 +29,7 @@ class RefreshRepositoryTest {
         override fun getOrCreate(): SecretKey = key ?: KeyGenerator.getInstance("AES").apply { init(256) }.generateKey().also { key = it }
         override fun delete() { key = null }
     }
-    private val tokens = TokenStore(java.io.File(dir, "token.bin"), keys).also { it.save("github_pat_TEST_1234", null) }
+    private val tokens = TokenStore(java.io.File(dir, "token.bin"), keys).also { it.add("github_pat_TEST_1234", "", null) }
     private val snapshots = SnapshotStore(java.io.File(dir, "snapshots"))
     private var calls = 0
     private var changed = 0
@@ -39,7 +39,7 @@ class RefreshRepositoryTest {
     private fun ok(meta: ResponseMeta = ResponseMeta()) = ApiResult.Ok(RepoState(listOf(branch("main")), false, false), meta)
     private fun err(e: ApiError, meta: ResponseMeta = ResponseMeta()) = ApiResult.Err(e, meta)
 
-    private val repo = RefreshRepository(tokens, snapshots, { _, _, _ -> calls++; next }, clock) { changed++ }
+    private val repo = RefreshRepository(tokens, snapshots, { _, _, _, _ -> calls++; next }, { null }, clock) { changed++ }
 
     @Test fun successStoresSnapshotAndClearsRefreshing() = runBlocking<Unit> {
         assertEquals(RefreshOutcome.SUCCESS, repo.refresh("o/r"))
@@ -74,7 +74,7 @@ class RefreshRepositoryTest {
     @Test fun unauthorizedMarksTokenInvalidAndStopsFurtherCalls() = runBlocking<Unit> {
         next = err(ApiError.TokenInvalid)
         repo.refresh("o/r")
-        assertEquals(TokenState.INVALID, tokens.summary.value?.state)
+        assertEquals(TokenState.INVALID, tokens.summaries.value.single().state)
         assertEquals(1, calls)
         repo.refresh("o/r")
         repo.refresh("o/other")
@@ -109,18 +109,18 @@ class RefreshRepositoryTest {
         val exp = Instant.parse("2026-12-24T15:32:55Z")
         next = ok(ResponseMeta(tokenExpiresAt = exp))
         repo.refresh("o/r")
-        assertEquals(exp, tokens.summary.value?.expiresAt)
+        assertEquals(exp, tokens.summaries.value.single().expiresAt)
     }
 
     @Test fun refreshingFlagClearedWhenFetcherThrows() = runBlocking<Unit> {
-        val boom = RefreshRepository(tokens, snapshots, { _, _, _ -> error("boom") }, clock) { }
+        val boom = RefreshRepository(tokens, snapshots, { _, _, _, _ -> error("boom") }, { null }, clock) { }
         runCatching { boom.refresh("o/r") }
         assertFalse(snapshots.get("o/r")?.refreshing ?: false)
     }
 
     @Test fun forbiddenBranchListIsRememberedAndSkippedFor24h() = runBlocking<Unit> {
         var seen: Boolean? = null
-        val r = RefreshRepository(tokens, snapshots, { _, _, s -> seen = s.branchesForbidden; ApiResult.Ok(RepoState(emptyList(), true, true), ResponseMeta()) }, clock) { }
+        val r = RefreshRepository(tokens, snapshots, { _, _, _, s -> seen = s.branchesForbidden; ApiResult.Ok(RepoState(emptyList(), true, true), ResponseMeta()) }, { null }, clock) { }
         r.refresh("o/r")
         assertEquals(false, seen)
         r.refresh("o/r")
@@ -134,5 +134,29 @@ class RefreshRepositoryTest {
         assertEquals(now, reopened.get("o/r")?.fetchedAt)
         reopened.deleteAll()
         assertNull(SnapshotStore(java.io.File(dir, "snapshots")).get("o/r"))
+    }
+
+    @Test fun eachRepoUsesItsOwnToken() = runBlocking<Unit> {
+        val second = tokens.add("github_pat_TEST_5678", "work", null)
+        val used = mutableListOf<String?>()
+        val r = RefreshRepository(
+            tokens, snapshots, { id, _, _, _ -> used += id; ok() },
+            { if (it == "o/work") second else null }, clock,
+        ) { }
+        val first = tokens.summaries.value.first().id
+        r.refresh("o/work")
+        r.refresh("o/private")
+        assertEquals(listOf(second, first), used)
+    }
+
+    @Test fun invalidTokenOnlyBlocksItsOwnRepos() = runBlocking<Unit> {
+        val second = tokens.add("github_pat_TEST_5678", "work", null)
+        val bad = tokens.summaries.value.first().id
+        tokens.markInvalid(bad)
+        val r = RefreshRepository(tokens, snapshots, { _, _, _, _ -> calls++; ok() }, { if (it == "o/work") second else bad }, clock) { }
+        r.refresh("o/old")
+        assertEquals(0, calls)
+        r.refresh("o/work")
+        assertEquals(1, calls)
     }
 }

@@ -58,7 +58,7 @@ class DisplaySettingsTest {
 
     @Test fun jsonRoundTripAndUnknownKeys() {
         val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
-        val c = WidgetConfig("o/r", false, DisplaySettings(fontSizeSp = 14, glyphStyle = GlyphStyle.BRACKET, pinned = listOf("main")))
+        val c = WidgetConfig("o/r", "tok1", false, DisplaySettings(fontSizeSp = 14, glyphStyle = GlyphStyle.BRACKET, pinned = listOf("main")))
         assertEquals(c, json.decodeFromString(WidgetConfig.serializer(), json.encodeToString(WidgetConfig.serializer(), c)))
         assertEquals(WidgetConfig("x/y"), json.decodeFromString(WidgetConfig.serializer(), """{"repo":"x/y","future":1}"""))
     }

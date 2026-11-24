@@ -26,6 +26,14 @@ class RefreshWorker(context: Context, params: WorkerParameters) : CoroutineWorke
     }
 }
 
+/** Reloads the list of pickable repos for all tokens. */
+class RepoListWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
+    override suspend fun doWork(): Result = when (applicationContext.graph.repoLists.refresh()) {
+        RefreshOutcome.SUCCESS -> Result.success()
+        RefreshOutcome.RETRY -> Result.retry()
+    }
+}
+
 /** Enqueues refresh work. Only the one-time path exists so far; periodic refresh arrives in T11. */
 object RefreshScheduler {
     /** Expedited unique work `refresh:{repo}`; a second request while one is queued is ignored (KEEP). No network constraint: offline attempts fail fast, record `! offline` and retry with backoff. */
@@ -35,5 +43,13 @@ object RefreshScheduler {
             .setExpedited(OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST)
             .build()
         WorkManager.getInstance(context).enqueueUniqueWork("refresh:$repo", ExistingWorkPolicy.KEEP, request)
+    }
+
+    /** Expedited unique work `repolist` (KEEP): loads the repos the tokens can see. */
+    fun refreshRepoList(context: Context) {
+        val request = OneTimeWorkRequestBuilder<RepoListWorker>()
+            .setExpedited(OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST)
+            .build()
+        WorkManager.getInstance(context).enqueueUniqueWork("repolist", ExistingWorkPolicy.KEEP, request)
     }
 }

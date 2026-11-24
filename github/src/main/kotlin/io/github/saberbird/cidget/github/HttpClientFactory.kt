@@ -59,11 +59,17 @@ public fun createHttpClient(
     .build()
 
 /**
- * A copy of this client that authenticates with [token] instead of the stored one and has no cache.
- * Used to validate a token before it is saved; nothing it fetches is cached.
+ * A copy of this client that authenticates with [tokenProvider] instead of the default one, keeping the
+ * shared cache. Used for one saved token among several (D23). The provider is called per request.
  */
-public fun OkHttpClient.withToken(token: String): OkHttpClient = newBuilder().apply {
-    cache(null)
+public fun OkHttpClient.withTokenProvider(tokenProvider: () -> String?): OkHttpClient = newBuilder().apply {
     interceptors().removeAll { it is AuthInterceptor }
-    addInterceptor(AuthInterceptor { token })
+    addInterceptor(AuthInterceptor(tokenProvider))
 }.build()
+
+/**
+ * Like [withTokenProvider] for a fixed [token], but without a cache. Used to validate a token before it is
+ * saved; nothing it fetches is cached.
+ */
+public fun OkHttpClient.withToken(token: String): OkHttpClient =
+    withTokenProvider { token }.newBuilder().cache(null).build()

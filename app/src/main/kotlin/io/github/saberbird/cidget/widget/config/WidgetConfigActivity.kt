@@ -69,19 +69,19 @@ internal enum class Target { WIDGET, GLOBAL }
 
 @Composable
 private fun ConfigRoot(graph: AppGraph, appWidgetId: Int, onFinish: () -> Unit) {
-    val token by graph.tokenStore.summary.collectAsState()
+    val tokens by graph.tokenStore.summaries.collectAsState()
     val config by graph.settings.widgetConfig(appWidgetId).collectAsState(WidgetConfig())
     val global by graph.settings.globalDisplay().collectAsState(DisplaySettings())
-    var screen by remember { mutableStateOf<Screen>(if (token == null) Screen.Token else if (config.repo == null) Screen.Repo else Screen.Main) }
+    var screen by remember { mutableStateOf<Screen>(if (tokens.isEmpty()) Screen.Token else if (config.repo == null) Screen.Repo else Screen.Main) }
     BackHandler(enabled = screen != Screen.Main) { screen = Screen.Main }
 
     when (val s = screen) {
-        Screen.Main -> MainScreen(graph, appWidgetId, config, global, token?.last4) { screen = it }
+        Screen.Main -> MainScreen(graph, appWidgetId, config, global, tokens.size) { screen = it }
         Screen.Token -> Column {
             TokenScreen(graph, showContentsHint = false)
             BackButton { screen = Screen.Main }
         }
-        Screen.Repo -> if (token == null) {
+        Screen.Repo -> if (tokens.isEmpty()) {
             Column {
                 Text(stringResource(R.string.picker_need_token), modifier = Modifier.padding(16.dp))
                 TextButton(onClick = { screen = Screen.Token }, modifier = Modifier.padding(horizontal = 16.dp)) {
@@ -89,8 +89,8 @@ private fun ConfigRoot(graph: AppGraph, appWidgetId: Int, onFinish: () -> Unit) 
                 }
             }
         } else {
-            RepoPickerScreen(graph, onPicked = { repo ->
-                graph.pick(appWidgetId, repo)
+            RepoPickerScreen(graph, onPicked = { repo, tokenId ->
+                graph.pickRepo(appWidgetId, repo, tokenId)
                 onFinish()
             })
         }
@@ -105,11 +105,4 @@ internal fun BackButton(onClick: () -> Unit) {
     TextButton(onClick = onClick, modifier = Modifier.padding(horizontal = 16.dp)) {
         Text(stringResource(R.string.config_back))
     }
-}
-
-private suspend fun AppGraph.pick(appWidgetId: Int, repo: String) {
-    settings.setWidgetRepo(appWidgetId, repo)
-    snapshots.deleteExcept(settings.reposInUse())
-    updateWidgets()
-    requestRefresh(repo)
 }

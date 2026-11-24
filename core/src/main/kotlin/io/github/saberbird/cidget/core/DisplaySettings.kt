@@ -85,6 +85,8 @@ public data class DisplaySettings(
 public data class WidgetConfig(
     /** `owner/repo`, or null until chosen. */
     val repo: String? = null,
+    /** Id of the saved token that has access to [repo] (D23); null = the first usable token. */
+    val tokenId: String? = null,
     /** True (default): [display] is ignored and the global defaults apply. */
     val useGlobalDefaults: Boolean = true,
     val display: DisplaySettings = DisplaySettings(),

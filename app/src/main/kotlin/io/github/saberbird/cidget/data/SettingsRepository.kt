@@ -3,6 +3,7 @@ package io.github.saberbird.cidget.data
 import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
@@ -18,6 +19,7 @@ import kotlinx.serialization.json.Json
 private val Context.settingsStore: DataStore<Preferences> by preferencesDataStore(name = "settings")
 
 private const val WIDGET_PREFIX = "widget_config_"
+private const val LIST_OPEN_PREFIX = "repo_list_open_"
 private val GLOBAL_KEY = stringPreferencesKey("global_display")
 
 /**
@@ -56,7 +58,21 @@ class SettingsRepository(private val store: DataStore<Preferences>) {
 
     suspend fun getWidgetRepo(appWidgetId: Int): String? = getWidgetConfig(appWidgetId).repo
 
-    suspend fun setWidgetRepo(appWidgetId: Int, repo: String) = updateWidget(appWidgetId) { it.copy(repo = repo) }
+    suspend fun setWidgetRepo(appWidgetId: Int, repo: String, tokenId: String? = null) =
+        updateWidget(appWidgetId) { it.copy(repo = repo, tokenId = tokenId) }
+
+    /** Token id for [repo] taken from the first widget that shows it, or null (use the default token). */
+    suspend fun tokenIdForRepo(repo: String): String? = allWidgets().values.firstOrNull { it.repo == repo }?.tokenId
+
+    private fun listKey(appWidgetId: Int) = booleanPreferencesKey(LIST_OPEN_PREFIX + appWidgetId)
+
+    /** True while the widget shows its repo list (`ls` view) instead of the branch list (D24). */
+    fun repoListOpen(appWidgetId: Int): Flow<Boolean> =
+        store.data.map { it[listKey(appWidgetId)] ?: false }.distinctUntilChanged()
+
+    suspend fun setRepoListOpen(appWidgetId: Int, open: Boolean) {
+        store.edit { if (open) it[listKey(appWidgetId)] = true else it.remove(listKey(appWidgetId)) }
+    }
 
     /** Global defaults for widgets that do not override them. */
     fun globalDisplay(): Flow<DisplaySettings> = store.data.map { decodeGlobal(it[GLOBAL_KEY]) }.distinctUntilChanged()
@@ -74,7 +90,7 @@ class SettingsRepository(private val store: DataStore<Preferences>) {
 
     /** Forgets a widget's settings (called when the widget is removed). */
     suspend fun deleteWidget(appWidgetId: Int) {
-        store.edit { it.remove(key(appWidgetId)) }
+        store.edit { it.remove(key(appWidgetId)); it.remove(listKey(appWidgetId)) }
     }
 
     /** All stored widget configurations by `appWidgetId`. */
