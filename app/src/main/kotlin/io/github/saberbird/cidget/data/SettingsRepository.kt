@@ -31,6 +31,13 @@ class SettingsRepository(private val store: DataStore<Preferences>) {
 
     private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
 
+    /**
+     * Emits whenever any stored setting changes (widget configs, global defaults, repo-list flags). The app
+     * uses it to redraw widgets, because a Glance session that has gone idle does not follow flows by itself.
+     */
+    fun changes(): Flow<Map<String, Any>> =
+        store.data.map { p -> p.asMap().mapKeys { it.key.name } }.distinctUntilChanged()
+
     private fun key(appWidgetId: Int) = stringPreferencesKey(WIDGET_PREFIX + appWidgetId)
 
     private fun decodeConfig(s: String?): WidgetConfig =

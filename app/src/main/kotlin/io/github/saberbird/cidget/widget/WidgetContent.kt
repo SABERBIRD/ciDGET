@@ -218,8 +218,16 @@ private fun RepoListView(context: Context, current: String?, list: RepoList, gly
                 maxLines = 1,
                 modifier = GlanceModifier.defaultWeight(),
             )
-            Text("[${glyphs.settings}] ", style = style(Palette.dim, sp), modifier = GlanceModifier.clickable(settings))
-            Text("[x]", style = style(Palette.dim, sp), modifier = GlanceModifier.clickable(actionRunCallback<CloseRepoListCallback>()))
+            Text(
+                "[${glyphs.settings}]",
+                style = style(Palette.dim, sp),
+                modifier = GlanceModifier.clickable(settings).padding(horizontal = 6.dp, vertical = 2.dp),
+            )
+            Text(
+                "[x]",
+                style = style(Palette.dim, sp),
+                modifier = GlanceModifier.clickable(actionRunCallback<CloseRepoListCallback>()).padding(horizontal = 6.dp, vertical = 2.dp),
+            )
         }
         val meta = buildList {
             list.fetchedAt?.let { add(context.getString(R.string.w_age_ago, formatAge(it, now))) }

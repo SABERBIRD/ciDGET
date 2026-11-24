@@ -22,6 +22,8 @@ import io.github.saberbird.cidget.github.createHttpClient
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.conflate
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
@@ -128,6 +130,14 @@ class AppGraph(val app: Application) {
         if (tokenStore.hasToken()) {
             settings.reposInUse().forEach(::refreshNow)
             RefreshScheduler.refreshRepoList(app)
+        }
+    }
+
+    init {
+        // Redraw widgets after every settings change, from the widget callbacks and from the settings screens
+        // alike (an idle Glance session would otherwise keep showing the old state).
+        background.launch {
+            settings.changes().drop(1).conflate().collect { runCatching { updateWidgets() } }
         }
     }
 

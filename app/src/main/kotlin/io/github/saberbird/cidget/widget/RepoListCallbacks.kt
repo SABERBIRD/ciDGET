@@ -13,6 +13,7 @@ class OpenRepoListCallback : ActionCallback {
         val graph = context.graph
         val appWidgetId = GlanceAppWidgetManager(context).getAppWidgetId(glanceId)
         graph.settings.setRepoListOpen(appWidgetId, true)
+        CidgetWidget().update(context, glanceId)
         graph.requestRepoList()
     }
 }
@@ -22,6 +23,7 @@ class CloseRepoListCallback : ActionCallback {
     override suspend fun onAction(context: Context, glanceId: GlanceId, parameters: ActionParameters) {
         val appWidgetId = GlanceAppWidgetManager(context).getAppWidgetId(glanceId)
         context.graph.settings.setRepoListOpen(appWidgetId, false)
+        CidgetWidget().update(context, glanceId)
     }
 }
 
