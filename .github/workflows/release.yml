@@ -4,10 +4,6 @@ on:
   push:
     tags:
       - "v*"
-    branches:
-      - dev
-    paths:
-      - ".github/workflows/release.yml"
   # Manual run: builds and verifies the signed release APK without publishing a release.
   workflow_dispatch:
 
