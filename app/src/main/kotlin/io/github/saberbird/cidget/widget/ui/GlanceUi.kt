@@ -45,7 +45,7 @@ import io.github.saberbird.cidget.widget.config.WidgetConfigActivity
  * The widget's colours for its theme (D12, WIDGET.md §1). `SYSTEM` uses day/night colour providers, so the
  * launcher switches them with the system's dark mode without a redraw.
  */
-internal class GlanceColors(theme: Theme) {
+internal class GlanceColors(private val theme: Theme) {
     private fun pick(color: (Palette) -> Color): ColorProvider = when (theme) {
         Theme.DARK -> ColorProvider(color(Palette.DARK))
         Theme.LIGHT -> ColorProvider(color(Palette.LIGHT))
