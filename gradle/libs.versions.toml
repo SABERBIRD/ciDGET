@@ -1,9 +1,11 @@
 [versions]
+# AndroidX is pinned to releases that still build with compileSdk 36 (D4). Newer Compose and
+# core releases need compileSdk 37 or later.
 agp = "9.5.1"
 kotlin = "2.4.21"
-composeBom = "2026.11.01"
-glance = "1.2.0"
-activityCompose = "1.13.0"
+composeBom = "2025.12.01"
+glance = "1.1.1"
+activityCompose = "1.11.0"
 # 0.6.x keeps kotlinx.datetime.Clock, which AGENTS.md requires.
 kotlinxDatetime = "0.6.2"
 junit = "4.13.2"
