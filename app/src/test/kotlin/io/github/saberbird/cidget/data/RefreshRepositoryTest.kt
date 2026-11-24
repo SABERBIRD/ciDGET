@@ -41,7 +41,7 @@ class RefreshRepositoryTest {
 
     private val repo = RefreshRepository(tokens, snapshots, { _, _, _ -> calls++; next }, clock) { changed++ }
 
-    @Test fun successStoresSnapshotAndClearsRefreshing() = runBlocking {
+    @Test fun successStoresSnapshotAndClearsRefreshing() = runBlocking<Unit> {
         assertEquals(RefreshOutcome.SUCCESS, repo.refresh("o/r"))
         val s = assertNotNull(snapshots.get("o/r"))
         assertEquals(now, s.fetchedAt)
@@ -51,7 +51,7 @@ class RefreshRepositoryTest {
         assertTrue(changed >= 2)
     }
 
-    @Test fun errorKeepsOldSnapshotAndRecordsError() = runBlocking {
+    @Test fun errorKeepsOldSnapshotAndRecordsError() = runBlocking<Unit> {
         repo.refresh("o/r")
         next = err(ApiError.Offline)
         assertEquals(RefreshOutcome.RETRY, repo.refresh("o/r"))
@@ -62,7 +62,7 @@ class RefreshRepositoryTest {
         assertFalse(s.refreshing)
     }
 
-    @Test fun transientErrorsRetryOthersDoNot() = runBlocking {
+    @Test fun transientErrorsRetryOthersDoNot() = runBlocking<Unit> {
         for (e in listOf(ApiError.Timeout, ApiError.Server(503))) {
             next = err(e); assertEquals(RefreshOutcome.RETRY, repo.refresh("o/r"))
         }
@@ -71,7 +71,7 @@ class RefreshRepositoryTest {
         }
     }
 
-    @Test fun unauthorizedMarksTokenInvalidAndStopsFurtherCalls() = runBlocking {
+    @Test fun unauthorizedMarksTokenInvalidAndStopsFurtherCalls() = runBlocking<Unit> {
         next = err(ApiError.TokenInvalid)
         repo.refresh("o/r")
         assertEquals(TokenState.INVALID, tokens.summary.value?.state)
@@ -81,7 +81,7 @@ class RefreshRepositoryTest {
         assertEquals(1, calls)
     }
 
-    @Test fun rateLimitedRepoIsSkippedUntilReset() = runBlocking {
+    @Test fun rateLimitedRepoIsSkippedUntilReset() = runBlocking<Unit> {
         next = err(ApiError.RateLimited(now + kotlin.time.Duration.parse("5m")))
         repo.refresh("o/r")
         assertEquals(1, calls)
@@ -90,7 +90,7 @@ class RefreshRepositoryTest {
         assertEquals(now + kotlin.time.Duration.parse("5m"), snapshots.get("o/r")?.rateLimitedUntil)
     }
 
-    @Test fun rateLimitHeadersWithZeroRemainingAlsoSkip() = runBlocking {
+    @Test fun rateLimitHeadersWithZeroRemainingAlsoSkip() = runBlocking<Unit> {
         val reset = now + kotlin.time.Duration.parse("10m")
         next = ok(ResponseMeta(rateLimit = RateLimit(5000, 0, reset, "core")))
         repo.refresh("o/r")
@@ -98,27 +98,27 @@ class RefreshRepositoryTest {
         assertEquals(1, calls)
     }
 
-    @Test fun noTokenDoesNothing() = runBlocking {
+    @Test fun noTokenDoesNothing() = runBlocking<Unit> {
         tokens.delete()
         repo.refresh("o/r")
         assertEquals(0, calls)
         assertNull(snapshots.get("o/r"))
     }
 
-    @Test fun expiryFromHeaderIsSaved() = runBlocking {
+    @Test fun expiryFromHeaderIsSaved() = runBlocking<Unit> {
         val exp = Instant.parse("2026-12-24T15:32:55Z")
         next = ok(ResponseMeta(tokenExpiresAt = exp))
         repo.refresh("o/r")
         assertEquals(exp, tokens.summary.value?.expiresAt)
     }
 
-    @Test fun refreshingFlagClearedWhenFetcherThrows() = runBlocking {
+    @Test fun refreshingFlagClearedWhenFetcherThrows() = runBlocking<Unit> {
         val boom = RefreshRepository(tokens, snapshots, { _, _, _ -> error("boom") }, clock) { }
         runCatching { boom.refresh("o/r") }
         assertFalse(snapshots.get("o/r")?.refreshing ?: false)
     }
 
-    @Test fun forbiddenBranchListIsRememberedAndSkippedFor24h() = runBlocking {
+    @Test fun forbiddenBranchListIsRememberedAndSkippedFor24h() = runBlocking<Unit> {
         var seen: Boolean? = null
         val r = RefreshRepository(tokens, snapshots, { _, _, s -> seen = s.branchesForbidden; ApiResult.Ok(RepoState(emptyList(), true, true), ResponseMeta()) }, clock) { }
         r.refresh("o/r")
@@ -128,7 +128,7 @@ class RefreshRepositoryTest {
         assertEquals(now, snapshots.get("o/r")?.branchesForbiddenCheckedAt)
     }
 
-    @Test fun snapshotsSurviveReopen() = runBlocking {
+    @Test fun snapshotsSurviveReopen() = runBlocking<Unit> {
         repo.refresh("o/r")
         val reopened = SnapshotStore(java.io.File(dir, "snapshots"))
         assertEquals(now, reopened.get("o/r")?.fetchedAt)
