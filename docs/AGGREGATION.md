@@ -31,6 +31,7 @@ data class BranchHead(val name: String, val sha: String)   // from GET /branches
 data class AggregationInput(
     val runs: List<Run>,                 // all runs fetched in this refresh (any order)
     val heads: List<BranchHead>?,        // null = branch list unavailable (fallback mode)
+    val headsComplete: Boolean,          // false = branch list was capped (GITHUB_API.md §3.1)
     val runsCoverageStart: Instant?,     // createdAt of the oldest fetched run; null if all runs were fetched
     val now: Instant,
 )
@@ -58,7 +59,7 @@ Every run maps to exactly one `RunState`:
 1. Drop runs where `headBranch == null` or `fromFork == true`.
 2. Group the remaining runs by `headBranch`.
 3. **Head commit of a branch:**
-   - **Accurate mode** (`heads != null`): `headSha = heads[branch].sha`. Branches present in `heads` but without runs exist (they matter for "show all branches"). Runs whose branch is not in `heads` (deleted branch) are dropped.
+   - **Accurate mode** (`heads != null`): `headSha = heads[branch].sha`. Branches present in `heads` but without runs exist (they matter for "show all branches"). Runs whose branch is not in `heads` are dropped if `headsComplete` (the branch was deleted). If not `headsComplete`, such a branch uses fallback mode for itself (`headApproximate = true`).
    - **Fallback mode** (`heads == null`): `headSha` = `headSha` of the run with the greatest `createdAt` (tie → greater `id`). The resulting `BranchStatus.headApproximate = true`.
 4. **Runs of the commit:** runs of this branch with `run.headSha == headSha`. Runs of the same SHA on *other* branches are **not** borrowed.
 5. **Coverage check** (accurate mode only): if the branch has no runs for `headSha` among the fetched runs, but `runsCoverageStart != null` (pagination stopped early), the result is `UNKNOWN_COVERAGE`. The data layer resolves it with a targeted `?head_sha=` request (see GITHUB_API.md §3.3) and runs aggregation again. If that is not possible, the branch is grey with reason `NOT_LOADED`.
@@ -159,3 +160,5 @@ Each row is one test (or more). Fixtures are built with a small test DSL, not JS
 | A26 | Idle filter with pinned branch older than N days | pinned kept |
 | A27 | Max rows truncation does not change worst-of-repo | |
 | A28 | Duration: completed, running, missing `runStartedAt` | |
+| A29 | `headsComplete = false`, runs on a branch missing from `heads` | that branch approximate, others exact |
+| A30 | `headsComplete = true`, runs on a branch missing from `heads` | dropped (deleted branch) |

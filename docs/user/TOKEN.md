@@ -1,6 +1,6 @@
 # Creating the GitHub token
 
-ciDGET reads your Actions statuses with a **fine-grained personal access token**. It can only *read*, and only the repositories you choose.
+ciDGET reads your Actions statuses with a **fine-grained personal access token**. It can only *read*, and only the repositories you choose (plus public repositories, which anyone can read anyway).
 
 1. Open <https://github.com/settings/personal-access-tokens/new>.
    (Or: your avatar → **Settings** → **Developer settings** → **Personal access tokens** → **Fine-grained tokens** → **Generate new token**.)
@@ -11,7 +11,7 @@ ciDGET reads your Actions statuses with a **fine-grained personal access token**
 6. **Permissions** → **Repository permissions**:
    - **Actions** → **Read-only**
    - **Metadata** → **Read-only** (GitHub adds it automatically)
-   - **Contents** → **Read-only** — *only if the app tells you the branch list needs it* (it then shows branches exactly; without it, statuses are marked `~` as approximate).
+   - **Contents** → **Read-only** (needed to know the latest commit of each branch exactly; without it the widget still works but marks statuses with `~` as approximate)
    Leave everything else at **No access**.
 7. **Generate token** and copy it (`github_pat_…`). GitHub shows it only once.
 8. In ciDGET: **Settings → Token → Paste → Save**. The app checks the token before saving.

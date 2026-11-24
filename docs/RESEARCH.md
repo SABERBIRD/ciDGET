@@ -32,13 +32,13 @@ The project owner runs the script with a fine-grained PAT limited to `SABERBIRD/
 
 | # | Question | Expected | Result |
 |---|---|---|---|
-| V1 | Can the PAT read runs of a private repo? | `200`, runs listed | _pending_ |
-| V2 | Does `/branches` work with Actions + Metadata only? | `200`, or `403` with `x-accepted-github-permissions: contents=read` → then D7 adds Contents: read | _pending_ |
-| V3 | Does `/user/repos` list only the granted repos? | only `SABERBIRD/testING` | _pending_ |
-| V4 | Format of `github-authentication-token-expiration` | e.g. `2026-12-24 00:00:00 UTC` | _pending_ |
-| V5 | Does a `304` leave `x-ratelimit-remaining` unchanged? | 2nd and 3rd calls `304`, same `remaining` | _pending_ |
-| V6 | No-access repo / invalid token | `404` / `401` | _pending_ |
-| V7 | Big public repo with many branches and runs | `200`, `link` header with `rel="next"` | _pending_ |
+| V1 | Can the PAT read runs of a private repo? | `200`, runs listed | **Pass** (2026-11-24): `200`, `x-accepted-github-permissions: actions=read` |
+| V2 | Does `/branches` work with Actions + Metadata only? | `200`, or `403` with `x-accepted-github-permissions: contents=read` → then D7 adds Contents: read | **No**: `403`, `x-accepted-github-permissions: contents=read`. Contents: read added to D7. |
+| V3 | Does `/user/repos` list only the granted repos? | only `SABERBIRD/testING` | **Partly**: the granted private repo plus **all public repos of the owner**; non-granted private repos are absent. The picker shows both, with a lock on private ones. |
+| V4 | Format of `github-authentication-token-expiration` | e.g. `2026-12-24 00:00:00 UTC` | **Pass**: `2026-12-24 15:32:55 UTC`, present on every response including errors (absent on `304`) |
+| V5 | Does a `304` leave `x-ratelimit-remaining` unchanged? | 2nd and 3rd calls `304`, same `remaining` | **Pass**: `304`, `304`, remaining stayed 4988 |
+| V6 | No-access repo / invalid token | `404` / `401` | **Pass**: `404` / `401` |
+| V7 | Big public repo with many branches and runs | `200`, `link` header with `rel="next"` | **Pass**, `microsoft/vscode`: runs 400 pages × 100, branches 62 pages × 100. The branch-page cap is too small for such repos, which led to D20 (single-branch lookups for displayed branches). Public repos' branch lists work without Contents: read. |
 
 ### V8–V10: device checks (done by the implementing agent on an emulator, API 31 and 36)
 

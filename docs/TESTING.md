@@ -46,10 +46,8 @@ Two workflows (`CI`, `Lint`) run `.ci/run.sh`, which reads its mode for each wor
 | `new-commit` | green commit, then a newer `[skip ci]` commit | GREY NO_RUNS in accurate mode (old green must not leak) |
 | `feature/a-very-long-branch-name-to-test-truncation-in-narrow-widgets` | pass | GREEN, truncated |
 
-**Status (2026-11-24): blocked (V11).** All jobs fail in about 2 s without running a step, so every branch is currently red. The project owner should check *GitHub → Settings → Billing and plans → Actions* (minutes for private repos, spending limit, payment method). After that, re-run all workflows. Then push the second, `[skip ci]` commit to `new-commit`:
+**Status (2026-11-24): blocked (V11).** The account's Actions minutes for private repos are used up, so all jobs fail in about 2 s and every branch is red. Private access has been verified (V1). The fix is to **make `testING` public**: public repos have free minutes. After that, re-run all workflows and push the second, `[skip ci]` commit to `new-commit`:
 
 ```sh
 git checkout new-commit && echo 2 >> .ci/branch && git commit -am "Newer commit without CI [skip ci]" && git push
 ```
-
-Alternative if private Actions minutes are unwanted: the fixture can also be made public for widget testing. V1 (private access) has to be checked on a private repo either way, but it only needs runs to exist, not to succeed.

@@ -2,7 +2,7 @@
 
 ## Token scope
 
-A fine-grained PAT limited to selected repositories, with **Actions: read** and **Metadata: read**. **Contents: read** is added only if V2 in RESEARCH.md shows the branch list needs it (D7). The app never asks for write permissions. The user guide is [user/TOKEN.md](user/TOKEN.md).
+A fine-grained PAT limited to selected repositories, with **Actions: read**, **Contents: read** (needed for the branch list, V2) and **Metadata: read** (D7). The app never asks for write permissions. The user guide is [user/TOKEN.md](user/TOKEN.md).
 
 ## Storage
 

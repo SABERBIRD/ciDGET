@@ -25,7 +25,7 @@ Order: tasks within a stage can run in parallel where *Depends on* allows.
 
 ### T4. Token storage and token screen
 - **Depends on:** T1
-- **Do:** `TokenStore` per SECURITY.md. Settings → Token screen (Compose M3): paste, show/hide, validate (`/user/repos?per_page=1`), save, replace, delete (evicts HTTP cache and snapshots), shows last 4 chars, expiry date, `INVALID` state with explanation. Link to user/TOKEN.md (the GitHub page). If the branch list for any repo was forbidden, show a hint: "Add Contents: Read-only to the token for exact branch heads".
+- **Do:** `TokenStore` per SECURITY.md. Settings → Token screen (Compose M3): paste, show/hide, validate (`/user/repos?per_page=1`), save, replace, delete (evicts HTTP cache and snapshots), shows last 4 chars, expiry date, `INVALID` state with explanation. Link to user/TOKEN.md (the GitHub page). If the branch list for any repo was forbidden, show a hint: "Add Contents: Read-only to the token for exact branch heads". The repo picker marks private repos with a lock and lists public repos too (V3: `/user/repos` returns the granted private repos plus all of the owner's public repos).
 - **Done when:** instrumented test of encrypt/decrypt round trip and of corrupt-file recovery; manual check on emulator; the token string appears in no log (`adb logcat` grep during save and refresh).
 
 ### T5. Snapshot store, refresh worker, manual refresh
@@ -104,6 +104,5 @@ Order: tasks within a stage can run in parallel where *Depends on* allows.
 
 | When | Action |
 |---|---|
-| Now | Fix Actions for private repos on the account, or decide to make `testING` public (TESTING.md §3, V11). |
-| Now / before T6 | Create a token for `testING` and run `bash tools/verify-token.sh`; send the output (it contains no secrets). |
+| Now | Make `testING` public (TESTING.md §3, V11). |
 | After T7 | Install the debug APK and review the MVP. |

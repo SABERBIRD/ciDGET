@@ -23,9 +23,10 @@ All network code lives in the `:github` module (pure JVM, OkHttp + kotlinx.seria
 
 | Purpose | Request | Permission (fine-grained PAT) |
 |---|---|---|
-| Repos the token can see | `GET /user/repos?per_page=100&sort=pushed` (all pages, max 10) | Metadata: read. **Verify V3:** that only the granted repositories are returned. |
+| Repos the token can see | `GET /user/repos?per_page=100&sort=pushed` (all pages, max 10) | Metadata: read. Returns the granted private repos **plus all public repos of the owner** (V3). |
 | Check one repo typed by hand | `GET /repos/{owner}/{repo}` | Metadata: read |
-| Branch heads | `GET /repos/{owner}/{repo}/branches?per_page=100` (max 5 pages = 500 branches) | **Verify V2:** Metadata, or Contents: read (D7) |
+| Branch heads | `GET /repos/{owner}/{repo}/branches?per_page=100` (max 5 pages = 500 branches) | **Contents: read** (V2: `403` with `x-accepted-github-permissions: contents=read` without it). Public repos work without it. |
+| Head of one branch | `GET /repos/{owner}/{repo}/branches/{branch}` (URL-encode the name) | Contents: read |
 | Workflow runs | `GET /repos/{owner}/{repo}/actions/runs?per_page=100&exclude_pull_requests=true` | Actions: read |
 | Runs of one commit | `GET /repos/{owner}/{repo}/actions/runs?head_sha={sha}&per_page=100&exclude_pull_requests=true` | Actions: read |
 
@@ -48,6 +49,7 @@ Input: `owner/repo`, settings (`maxRunPages`, `hideIdleDays`, `showAllBranches`,
 ### 3.1 Branch heads
 1. Unless the repo is marked `branchesForbidden` (cached flag, re-checked once per 24 h and on every token change), fetch all branch pages.
 2. A `403` here is **not an error**: set `branchesForbidden`, continue in fallback mode (`heads = null`).
+3. **Page cap reached** (a `next` link still exists after 5 pages): the list is partial (`headsComplete = false`). After the first aggregation pass, fetch `GET /branches/{branch}` for the branches that will be **displayed** (after filters, sorting and `maxRows`) and pinned branches whose head is still unknown, at most **20** per refresh (ETag'd). Any other branch stays in approximate mode (D20). Example: `microsoft/vscode` has about 62 pages of branches.
 
 ### 3.2 Runs
 1. Fetch page 1.
@@ -62,13 +64,13 @@ Input: `owner/repo`, settings (`maxRunPages`, `hideIdleDays`, `showAllBranches`,
 After a first aggregation pass, for the branches that would be **displayed** (after filters, sorting and `maxRows`) and are flagged `UNKNOWN_COVERAGE`, plus the branch whose head SHA equals the SHA of the oldest fetched run (its runs may continue on the next page), request `?head_sha={sha}`. Do at most **10** such requests per refresh; they use ETags too. Merge the results (dedupe by run `id`) and aggregate again. Branches still unresolved become grey `NOT_LOADED`.
 
 ### 3.4 Request budget
-Worst case per refresh: 5 (branches) + 3 (runs) + 10 (targeted) = 18 requests. The idle case is usually 2 requests answered with `304`. The limit for a PAT is 5,000 requests/hour.
+Worst case per refresh: 5 (branches) + 20 (single branches, only for huge repos) + 3 (runs) + 10 (targeted) = 38 requests. The idle case is usually 2 requests answered with `304`. The limit for a PAT is 5,000 requests/hour.
 
 ## 4. Response headers to record
 
 | Header | Use |
 |---|---|
-| `github-authentication-token-expiration` | Token expiry, shown in settings and as a widget warning *N* days ahead. Parse leniently (`yyyy-MM-dd HH:mm:ss z` and `yyyy-MM-dd HH:mm:ss Z`). Absent = no expiry. Record the observed format in V4. |
+| `github-authentication-token-expiration` | Token expiry, shown in settings and as a widget warning *N* days ahead. Observed format (V4): `2026-12-24 15:32:55 UTC`. Parse `yyyy-MM-dd HH:mm:ss z`, and also accept a numeric offset (`Z`) defensively. Absent = no expiry. |
 | `x-ratelimit-remaining`, `x-ratelimit-reset` (epoch seconds), `x-ratelimit-limit`, `x-ratelimit-resource` | Rate-limit state. Before a background refresh, skip it if the saved `remaining == 0` and `reset` is in the future. |
 | `retry-after` (seconds) | Secondary rate limit: wait exactly this long. |
 | `x-accepted-github-permissions` | Logged in debug builds only. Useful to diagnose a 403. |
