@@ -1,6 +1,6 @@
 plugins {
-    alias(libs.plugins.android.application)
-    alias(libs.plugins.kotlin.compose)
+    id("com.android.application")
+    id("org.jetbrains.kotlin.plugin.compose")
 }
 
 // versionCode: CI run number, else 1. versionName: the tag without the leading "v", else 0.0.0-dev.
