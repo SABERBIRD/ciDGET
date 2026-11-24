@@ -1,9 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <style name="Theme.Cidget" parent="android:Theme.Material.NoActionBar" />
-    <!-- Full-screen terminal look for the settings (D26). -->
-    <style name="Theme.Cidget.Config" parent="android:Theme.Material.NoActionBar">
-        <item name="android:windowBackground">#101214</item>
+    <!-- The configuration activity: no window when it only switches the widget to its settings (D28); the wide
+         terminal paints its own dark background. -->
+    <style name="Theme.Cidget.Config" parent="android:Theme.Translucent.NoTitleBar">
+        <item name="android:windowAnimationStyle">@null</item>
+        <item name="android:windowBackground">@android:color/transparent</item>
         <item name="android:statusBarColor">#101214</item>
         <item name="android:navigationBarColor">#101214</item>
         <item name="android:windowLightStatusBar">false</item>

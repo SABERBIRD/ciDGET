@@ -22,9 +22,16 @@ private const val MIN_BRANCH = 3
 
 /**
  * Chooses columns and widths for [charsPerLine] (WIDGET.md §3.1). [rows] hold the rendered text of each
- * cell. Pure and deterministic.
+ * cell. With [fillLine] the columns together span exactly [charsPerLine] when there is room, the columns up to the
+ * branch (or first flexible) column are aligned left and the later ones right. Pure and
+ * deterministic.
  */
-public fun fitColumns(columns: List<ColumnConfig>, rows: List<Map<ColumnId, String>>, charsPerLine: Int): List<FittedColumn> {
+public fun fitColumns(
+    columns: List<ColumnConfig>,
+    rows: List<Map<ColumnId, String>>,
+    charsPerLine: Int,
+    fillLine: Boolean = false,
+): List<FittedColumn> {
     class Col(val cfg: ColumnConfig, val spec: ColumnSpec, val order: Int, val content: Int) {
         val need: Int get() = if (spec.flexible) minOf(spec.min, content) else content
     }
@@ -70,7 +77,14 @@ public fun fitColumns(columns: List<ColumnConfig>, rows: List<Map<ColumnId, Stri
         widths[c.cfg.id] = widths.getValue(c.cfg.id) + give
         spare -= give
     }
-    return cols.map { FittedColumn(it.cfg.id, widths.getValue(it.cfg.id), it.spec.align) }
+    if (!fillLine) return cols.map { FittedColumn(it.cfg.id, widths.getValue(it.cfg.id), it.spec.align) }
+    // Leftover width goes to one stretch column: BRANCH, else the first flexible column, else the last one.
+    // Columns up to and including it are aligned left in their cells, the columns after it right, so the
+    // gap sits between the two groups and every column keeps its own cell (D28).
+    val stretch = cols.firstOrNull { it.cfg.id == ColumnId.BRANCH } ?: cols.firstOrNull { it.spec.flexible } ?: cols.last()
+    if (spare > 0) widths[stretch.cfg.id] = widths.getValue(stretch.cfg.id) + spare
+    val stretchAt = cols.indexOf(stretch)
+    return cols.mapIndexed { i, c -> FittedColumn(c.cfg.id, widths.getValue(c.cfg.id), if (i <= stretchAt) Align.LEFT else Align.RIGHT) }
 }
 
 /** Renders one row's cells to their fitted widths (padded, aligned, truncated with `…`). */

@@ -1,34 +1,25 @@
 package io.github.saberbird.cidget.widget.config
 
 import android.appwidget.AppWidgetManager
+import android.content.Context
 import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
 import androidx.activity.ComponentActivity
-import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.unit.dp
-import io.github.saberbird.cidget.R
-import io.github.saberbird.cidget.core.DisplaySettings
-import io.github.saberbird.cidget.core.WidgetConfig
-import io.github.saberbird.cidget.di.AppGraph
+import androidx.glance.appwidget.GlanceAppWidgetManager
+import io.github.saberbird.cidget.core.WidgetView
 import io.github.saberbird.cidget.graph
-import io.github.saberbird.cidget.settings.TokenScreen
+import io.github.saberbird.cidget.widget.CidgetWidget
+import io.github.saberbird.cidget.widget.ui.WideTerminal
+import kotlinx.coroutines.launch
 
 /**
- * The app's only settings UI (D22: no launcher icon). It is the widget's configuration activity, opened
- * by the system when the widget is added and from the widget's "reconfigure" menu entry, and by a tap on
- * the widget header as a fallback for launchers without that entry. Backing out keeps the widget
+ * The widget's configuration activity (D28). The settings live inside the widget, so for a widget big enough
+ * to show them this activity has no window: it switches the widget to its settings (or to the repo list when
+ * a new widget has no repo yet), redraws the widget (the system may hold back the first update of a widget
+ * that has a configuration activity) and finishes. For a widget too small, and for the narrow widget's `~$`
+ * icon, it shows the same screens full screen ([WideTerminal]). Backing out keeps the widget
  * (`configuration_optional`).
  */
 class WidgetConfigActivity : ComponentActivity() {
@@ -41,61 +32,47 @@ class WidgetConfigActivity : ComponentActivity() {
         }
         setResult(RESULT_OK, Intent().putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId))
         val graph = applicationContext.graph
-        setContent {
-            TerminalTheme {
-                ConfigRoot(graph, appWidgetId, onFinish = { finish() })
+        val wide = intent.getBooleanExtra(EXTRA_WIDE, false) || isSmall(appWidgetId)
+        graph.background.launch {
+            val config = graph.settings.getWidgetConfig(appWidgetId)
+            val requested = intent.getStringExtra(EXTRA_VIEW)?.let { runCatching { WidgetView.valueOf(it) }.getOrNull() }
+            // A new widget without a repo starts at the repo list when a token exists, else at the settings.
+            val view = requested ?: if (config.repo == null && graph.tokenStore.hasToken()) WidgetView.REPOS else WidgetView.SETTINGS
+            graph.settings.updateWidget(appWidgetId) { it.copy(view = view) }
+            if (view == WidgetView.REPOS) graph.requestRepoList()
+            runCatching {
+                val glanceId = GlanceAppWidgetManager(applicationContext).getGlanceIdBy(appWidgetId)
+                CidgetWidget().update(applicationContext, glanceId)
             }
-        }
-    }
-}
-
-/** Where the user is inside the configuration activity. */
-internal sealed interface Screen {
-    data object Main : Screen
-    data object Token : Screen
-    data object Repo : Screen
-    data class Columns(val target: Target) : Screen
-    data class Display(val target: Target) : Screen
-    data object CopyFrom : Screen
-}
-
-/** Whose display settings a screen edits. */
-internal enum class Target { WIDGET, GLOBAL }
-
-@Composable
-private fun ConfigRoot(graph: AppGraph, appWidgetId: Int, onFinish: () -> Unit) {
-    val tokens by graph.tokenStore.summaries.collectAsState()
-    val config by graph.settings.widgetConfig(appWidgetId).collectAsState(WidgetConfig())
-    val global by graph.settings.globalDisplay().collectAsState(DisplaySettings())
-    var screen by remember { mutableStateOf<Screen>(if (tokens.isEmpty()) Screen.Token else if (config.repo == null) Screen.Repo else Screen.Main) }
-    BackHandler(enabled = screen != Screen.Main) { screen = Screen.Main }
-
-    when (val s = screen) {
-        Screen.Main -> MainScreen(graph, appWidgetId, config, global) { screen = it }
-        Screen.Token -> Column {
-            TokenScreen(graph, showContentsHint = false)
-            BackButton { screen = Screen.Main }
-        }
-        Screen.Repo -> if (tokens.isEmpty()) {
-            Column {
-                Text(stringResource(R.string.picker_need_token), modifier = Modifier.padding(16.dp))
-                Column(Modifier.padding(horizontal = 16.dp)) {
-                    TermButton(stringResource(R.string.token_title)) { screen = Screen.Token }
+            runOnUiThread {
+                if (wide) {
+                    setContent { WideTerminal(graph, appWidgetId, onClose = { finish() }) }
+                } else {
+                    finish()
                 }
             }
-        } else {
-            RepoPickerScreen(graph, onPicked = { repo, tokenId ->
-                graph.pickRepo(appWidgetId, repo, tokenId)
-                onFinish()
-            })
         }
-        is Screen.Columns -> ColumnsScreen(graph, appWidgetId, config, global, s.target) { screen = Screen.Main }
-        is Screen.Display -> DisplayScreen(graph, appWidgetId, config, global, s.target) { screen = Screen.Main }
-        Screen.CopyFrom -> CopyFromScreen(graph, appWidgetId) { screen = Screen.Main }
     }
-}
 
-@Composable
-internal fun BackButton(onClick: () -> Unit) {
-    Column(Modifier.padding(horizontal = 16.dp)) { TermButton(stringResource(R.string.config_back), onClick = onClick) }
+    /** True when the launcher reports a widget smaller than one terminal screen needs (one cell wide or short). */
+    private fun isSmall(appWidgetId: Int): Boolean {
+        val options = AppWidgetManager.getInstance(this).getAppWidgetOptions(appWidgetId)
+        val width = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, 0)
+        val height = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MAX_HEIGHT, 0)
+        return (width in 1 until SMALL_DP) || (height in 1 until SMALL_DP)
+    }
+
+    companion object {
+        private const val EXTRA_WIDE = "wide"
+        private const val EXTRA_VIEW = "view"
+        private const val SMALL_DP = 110
+
+        /** Opens the wide terminal at the repo list (the narrow widget's `~$` icon and a tap on an empty 1×1). */
+        fun wideIntent(context: Context, appWidgetId: Int): Intent =
+            Intent(context, WidgetConfigActivity::class.java)
+                .putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId)
+                .putExtra(EXTRA_WIDE, true)
+                .putExtra(EXTRA_VIEW, WidgetView.REPOS.name)
+                .setData(Uri.parse("cidget://wide/$appWidgetId"))
+    }
 }

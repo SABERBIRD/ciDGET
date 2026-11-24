@@ -88,14 +88,14 @@ class AppGraph(val app: Application) {
     }
 
     /**
-     * Picks [repo] (seen by [tokenId]) for widget [appWidgetId], closes its repo list, prunes snapshots and
+     * Picks [repo] (seen by [tokenId]) for widget [appWidgetId], returns it to the branch list, prunes snapshots and
      * queues a refresh of the repo.
      */
     suspend fun pickRepo(appWidgetId: Int, repo: String, tokenId: String?) {
         val before = settings.getWidgetRepo(appWidgetId)
-        // One atomic write; the widget observes it and redraws, so the switch is instant (D26).
+        // One atomic write (also back to the branch list); the widget observes it and redraws, so the switch is
+        // instant (D26).
         settings.setWidgetRepo(appWidgetId, repo, tokenId)
-        settings.setRepoListOpen(appWidgetId, false)
         // Everything slower runs in the background, so the next tap is never waiting for this repo.
         background.launch {
             val inUse = settings.reposInUse()

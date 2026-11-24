@@ -132,4 +132,22 @@ class ColumnFittingTest {
         val f = fitColumns(cfg(ColumnId.STATUS, ColumnId.BRANCH).map { if (it.id == ColumnId.BRANCH) it.copy(maxChars = 50) else it }, listOf(wide), 80)
         assertEquals(50, f.single { it.id == ColumnId.BRANCH }.width)
     }
+
+    @Test fun l14_columnsAfterTheBranchAreAlignedRightEvenIfTheirSpecSaysLeft() {
+        val rows = listOf(row(ColumnId.STATUS to "✓", ColumnId.BRANCH to "main", ColumnId.WORKFLOW to "CI"))
+        val f = fitColumns(cfg(ColumnId.STATUS, ColumnId.BRANCH, ColumnId.WORKFLOW), rows, 30, fillLine = true)
+        assertEquals(Align.RIGHT, f.single { it.id == ColumnId.WORKFLOW }.align)
+        assertEquals(Align.LEFT, fitColumns(cfg(ColumnId.STATUS, ColumnId.BRANCH, ColumnId.WORKFLOW), rows, 30).single { it.id == ColumnId.WORKFLOW }.align)
+    }
+
+    @Test fun l13_fillLineGivesTheGapToBranchSoTheOthersHugTheEdges() {
+        val rows = listOf(row(ColumnId.STATUS to "✓", ColumnId.BRANCH to "main", ColumnId.AGE to "5m"))
+        val f = fitColumns(cfg(ColumnId.STATUS, ColumnId.BRANCH, ColumnId.AGE), rows, 30, fillLine = true)
+        assertEquals(30, f.sumOf { it.width } + (f.size - 1))
+        assertEquals(1, f.single { it.id == ColumnId.STATUS }.width)
+        assertEquals(2, f.single { it.id == ColumnId.AGE }.width)
+        assertEquals(listOf(Align.LEFT, Align.LEFT, Align.RIGHT), f.map { it.align })
+        val plain = fitColumns(cfg(ColumnId.STATUS, ColumnId.BRANCH, ColumnId.AGE), rows, 30)
+        assertEquals(4 + 1 + 1 + 1 + 2, plain.sumOf { it.width } + (plain.size - 1))
+    }
 }

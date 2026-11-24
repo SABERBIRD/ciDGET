@@ -1,28 +1,20 @@
 package io.github.saberbird.cidget.widget
 
-import android.appwidget.AppWidgetManager
-import android.content.Context
-import android.content.Intent
-import android.net.Uri
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.glance.GlanceModifier
 import androidx.glance.LocalContext
 import androidx.glance.LocalSize
-import androidx.glance.action.Action
-import androidx.glance.action.actionParametersOf
 import androidx.glance.action.clickable
-import androidx.glance.appwidget.action.actionRunCallback
-import androidx.glance.appwidget.action.actionStartActivity
 import androidx.glance.appwidget.lazy.LazyColumn
 import androidx.glance.appwidget.lazy.items
 import androidx.glance.background
 import androidx.glance.layout.Alignment
 import androidx.glance.layout.Box
 import androidx.glance.layout.Column
-import androidx.glance.layout.Row
 import androidx.glance.layout.fillMaxSize
 import androidx.glance.layout.fillMaxWidth
 import androidx.glance.layout.padding
@@ -30,289 +22,167 @@ import androidx.glance.text.FontFamily
 import androidx.glance.text.Text
 import androidx.glance.text.TextStyle
 import androidx.glance.unit.ColorProvider
-import io.github.saberbird.cidget.R
-import io.github.saberbird.cidget.action.ActionActivity
 import io.github.saberbird.cidget.core.BranchStatus
-import io.github.saberbird.cidget.core.DisplaySettings
-import io.github.saberbird.cidget.core.SegmentRole
 import io.github.saberbird.cidget.core.Status
-import io.github.saberbird.cidget.core.TinySource
-import io.github.saberbird.cidget.core.cellsFor
+import io.github.saberbird.cidget.core.TinyTap
+import io.github.saberbird.cidget.core.WidgetConfig
 import io.github.saberbird.cidget.core.charsPerLine
-import io.github.saberbird.cidget.core.fitColumns
-import io.github.saberbird.cidget.core.renderRow
-import io.github.saberbird.cidget.core.rowSegments
 import io.github.saberbird.cidget.core.rowUrl
 import io.github.saberbird.cidget.core.selectBranches
-import io.github.saberbird.cidget.core.shareText
-import io.github.saberbird.cidget.core.formatAge
+import io.github.saberbird.cidget.core.tinyTarget
 import io.github.saberbird.cidget.data.RepoList
 import io.github.saberbird.cidget.data.RepoSnapshot
-import io.github.saberbird.cidget.widget.config.WidgetConfigActivity
+import io.github.saberbird.cidget.data.TokenState
+import io.github.saberbird.cidget.data.TokenSummary
+import io.github.saberbird.cidget.widget.ui.GlanceScreen
+import io.github.saberbird.cidget.widget.ui.UiAction
+import io.github.saberbird.cidget.widget.ui.UiEnv
+import io.github.saberbird.cidget.widget.ui.buildScreen
+import io.github.saberbird.cidget.widget.ui.color
+import io.github.saberbird.cidget.widget.ui.toGlance
+import io.github.saberbird.cidget.widget.ui.UiRole
 import kotlinx.datetime.Instant
 
 private const val PADDING_DP = 8
 private const val LINE_HEIGHT_FACTOR = 1.5f
 
-private fun style(color: Color, sizeSp: Int) = TextStyle(
-    color = ColorProvider(color),
-    fontFamily = FontFamily.Monospace,
-    fontSize = sizeSp.sp,
-)
+/** Narrower than this (dp) a widget is one cell wide: the 1×1 tile or the narrow column (D28). */
+private const val ONE_CELL_DP = 110f
 
-private fun statusColor(s: Status): Color = when (s) {
-    Status.RED -> Palette.red
-    Status.YELLOW -> Palette.yellow
-    Status.GREEN -> Palette.green
-    Status.GREY -> Palette.grey
+private fun style(color: Color, sizeSp: Int) = TextStyle(color = ColorProvider(color), fontFamily = FontFamily.Monospace, fontSize = sizeSp.sp)
+
+private fun statusRole(s: Status): UiRole = when (s) {
+    Status.RED -> UiRole.RED
+    Status.YELLOW -> UiRole.YELLOW
+    Status.GREEN -> UiRole.GREEN
+    Status.GREY -> UiRole.GREY
 }
 
-private fun viewIntent(appWidgetId: Int, url: String) =
-    Intent(Intent.ACTION_VIEW, Uri.parse(url)).putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId)
+private fun tileColor(s: Status): Color = when (s) {
+    Status.RED -> Palette.tileRed
+    Status.YELLOW -> Palette.tileYellow
+    Status.GREEN -> Palette.tileGreen
+    Status.GREY -> Palette.tileGrey
+}
 
-/** Picks TINY or LIST for the exact size the launcher reports (WIDGET.md §2). */
+/**
+ * Picks the look for the exact size the launcher reports (WIDGET.md §2, D28): the 1×1 tile, the narrow
+ * column (one cell wide and tall) or the terminal list with its settings screens.
+ */
 @Composable
 internal fun WidgetContent(
     appWidgetId: Int,
-    repo: String?,
+    config: WidgetConfig,
+    tokens: List<TokenSummary>,
+    tokenState: TokenState?,
+    repoList: RepoList,
     snapshot: RepoSnapshot?,
-    tokenPresent: Boolean,
-    tokenInvalid: Boolean,
     now: Instant,
     glyphs: Glyphs,
-    display: DisplaySettings,
-    repoListOpen: Boolean,
-    repoList: RepoList,
 ) {
-    val context = LocalContext.current
+    val base = LocalContext.current
+    val display = config.display
+    val ctx = remember(base, display.language) { base.withLanguage(display.language) }
     val size = LocalSize.current
-    val fontScale = context.resources.configuration.fontScale
-    val lineHeightDp = display.fontSizeSp * fontScale * LINE_HEIGHT_FACTOR
-    val picker: Action = actionStartActivity(
-        Intent(context, WidgetConfigActivity::class.java)
-            .putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId)
-            .setData(Uri.parse("cidget://settings/$appWidgetId")),
-    )
-    val tiny = size.width.value < 100f || size.height.value < 2 * lineHeightDp + 2 * PADDING_DP
-    if (tiny) {
-        TinyContent(appWidgetId, repo, snapshot, tokenPresent, tokenInvalid, now, glyphs, display, picker, size.width.value, size.height.value)
-    } else {
-        ListContent(
-            appWidgetId, repo, snapshot, tokenPresent, tokenInvalid, now, glyphs, display, picker,
-            size.width.value, fontScale, repoListOpen, repoList,
-        )
+    val fontScale = base.resources.configuration.fontScale
+    val sp = display.fontSizeSp
+    val lineHeightDp = sp * fontScale * LINE_HEIGHT_FACTOR
+    val w = size.width.value
+    val h = size.height.value
+    when {
+        w < ONE_CELL_DP && h >= ONE_CELL_DP -> ColumnContent(appWidgetId, config, snapshot, now, glyphs, tokenState)
+        w < ONE_CELL_DP || h < 2 * lineHeightDp + 2 * PADDING_DP -> TinyContent(appWidgetId, config, snapshot, tokenState, now, glyphs, w, h)
+        else -> {
+            // One character of safety margin: some launchers report sizes a few dp off (RESEARCH.md R2).
+            val cpl = (charsPerLine(w, 2f * PADDING_DP, sp.toFloat(), fontScale, Glyphs.advanceRatio) - 1).coerceAtLeast(0)
+            val env = UiEnv(ctx, appWidgetId, config, tokens, tokenState, repoList, snapshot, now, glyphs, cpl)
+            GlanceScreen(buildScreen(env), appWidgetId, sp)
+        }
     }
 }
 
-/** TINY: one big glyph in the status colour, `!` in a corner on error. Tap opens the shown run. */
+private fun targetOf(config: WidgetConfig, snapshot: RepoSnapshot?, now: Instant): BranchStatus? {
+    val d = config.display
+    val view = selectBranches(snapshot?.branches.orEmpty(), d.viewOptions().copy(maxRows = null), now)
+    return tinyTarget(view, d.tinySource, d.pinned)
+}
+
+/** 1×1: a tile in the status colour with a small symbol and the run number. The tap is the user's choice. */
 @Composable
 private fun TinyContent(
     appWidgetId: Int,
-    repo: String?,
+    config: WidgetConfig,
     snapshot: RepoSnapshot?,
-    tokenPresent: Boolean,
-    tokenInvalid: Boolean,
+    tokenState: TokenState?,
     now: Instant,
     glyphs: Glyphs,
-    display: DisplaySettings,
-    settings: Action,
     widthDp: Float,
     heightDp: Float,
 ) {
-    val view = selectBranches(snapshot?.branches.orEmpty(), display.viewOptions().copy(maxRows = null), now)
-    val pinned = if (display.tinySource == TinySource.PINNED) display.pinned.firstOrNull() else null
-    val target: BranchStatus? = pinned?.let { p -> view.rows.firstOrNull { it.branch == p } }
-        ?: view.rows.firstOrNull { it.status == view.worst }
-    val status = target?.status ?: view.worst
-    val hasError = !tokenPresent || tokenInvalid || snapshot?.error != null
-    val click: Action = if (repo != null && target != null) {
-        actionStartActivity(viewIntent(appWidgetId, rowUrl(repo, target)))
+    val context = LocalContext.current
+    val repo = config.repo
+    val target = if (repo != null) targetOf(config, snapshot, now) else null
+    val status = target?.status ?: Status.GREY
+    val hasError = tokenState == null || tokenState == TokenState.INVALID || snapshot?.error != null
+    val action: UiAction = if (repo == null || target == null) {
+        UiAction.OpenWide
     } else {
-        settings
+        when (config.display.tinyTap) {
+            TinyTap.RUN -> UiAction.Open(rowUrl(repo, target))
+            TinyTap.REFRESH -> UiAction.Do("refresh")
+            TinyTap.COPY -> UiAction.Copy(target.branch, rowUrl(repo, target))
+        }
     }
-    val glyphSp = minOf(0.6f * minOf(widthDp, heightDp), 48f).toInt().coerceAtLeast(10)
+    val symbolSp = minOf(0.34f * minOf(widthDp, heightDp), 26f).toInt().coerceAtLeast(12)
     Box(
-        modifier = GlanceModifier.fillMaxSize().background(Palette.bg).clickable(click),
+        modifier = GlanceModifier.fillMaxSize().background(tileColor(status)).clickable(action.toGlance(context, appWidgetId)),
         contentAlignment = Alignment.Center,
     ) {
-        Text(glyphs.forStatus(status), style = style(statusColor(status), glyphSp))
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(glyphs.forStatus(status), style = style(Color.White, symbolSp))
+            target?.representative?.let { Text("#${it.runNumber}", style = style(Color.White, 11)) }
+        }
         if (hasError) {
             Box(modifier = GlanceModifier.fillMaxSize().padding(2.dp), contentAlignment = Alignment.TopEnd) {
-                Text("!", style = style(Palette.red, 12))
+                Text("!", style = style(Color.White, 12))
             }
         }
     }
 }
 
-/** LIST: header, meta line, then fitted rows (WIDGET.md §2–§3). */
+/**
+ * One cell wide, taller: the blue `~$` on top opens the wide terminal (repo list, settings); below, per
+ * branch a symbol, the run number and the copy button, one under another and flush left.
+ */
 @Composable
-private fun ListContent(
+private fun ColumnContent(
     appWidgetId: Int,
-    repo: String?,
+    config: WidgetConfig,
     snapshot: RepoSnapshot?,
-    tokenPresent: Boolean,
-    tokenInvalid: Boolean,
     now: Instant,
     glyphs: Glyphs,
-    display: DisplaySettings,
-    picker: Action,
-    widthDp: Float,
-    fontScale: Float,
-    repoListOpen: Boolean,
-    repoList: RepoList,
+    tokenState: TokenState?,
 ) {
     val context = LocalContext.current
+    val display = config.display
     val sp = display.fontSizeSp
-    if (repoListOpen && tokenPresent && !tokenInvalid) {
-        RepoListView(context, repo, repoList, glyphs, now, sp, picker)
-        return
-    }
-    Column(GlanceModifier.fillMaxSize().background(Palette.bg).padding(PADDING_DP.dp)) {
-        Row(GlanceModifier.fillMaxWidth()) {
-            val name = repo?.substringAfter('/') ?: ""
-            // A tap on the repo name swaps the content for the repo list (D24). Without a token it opens settings.
-            Text(
-                text = "~/$name $ ci",
-                style = style(Palette.prompt, sp),
-                maxLines = 1,
-                modifier = GlanceModifier.defaultWeight().clickable(
-                    if (tokenPresent && !tokenInvalid) actionRunCallback<OpenRepoListCallback>() else picker,
-                ),
-            )
-            if (repo != null && tokenPresent) {
-                val label = if (snapshot?.refreshing == true) "[...]" else "[${glyphs.refresh}]"
-                Text(label, style = style(Palette.dim, sp), modifier = GlanceModifier.clickable(actionRunCallback<RefreshCallback>()))
-            }
-        }
-        val meta = metaLine(context, snapshot, tokenPresent, tokenInvalid, now)
-        if (meta.isNotEmpty()) Text(meta, style = style(Palette.dim, sp), maxLines = 1)
-
-        when {
-            repo == null -> Text(
-                context.getString(R.string.w_pick_repo),
-                style = style(Palette.dim, sp),
-                modifier = GlanceModifier.fillMaxWidth().clickable(picker),
-            )
-            !tokenPresent -> Text(
-                context.getString(R.string.w_set_token),
-                style = style(Palette.dim, sp),
-                modifier = GlanceModifier.fillMaxWidth().clickable(picker),
-            )
-            snapshot == null || (snapshot.fetchedAt == null && snapshot.branches.isEmpty()) -> Text(
-                context.getString(if (snapshot?.error == null) R.string.w_loading else R.string.w_no_data),
-                style = style(Palette.dim, sp),
-            )
-            else -> Rows(context, appWidgetId, repo, snapshot, now, glyphs, display, widthDp, fontScale)
-        }
-    }
-}
-
-/** The repo list (`ls`): terminal-style rows from the local cache; a tap picks the repo (D24). */
-@Composable
-private fun RepoListView(context: Context, current: String?, list: RepoList, glyphs: Glyphs, now: Instant, sp: Int, settings: Action) {
-    Column(GlanceModifier.fillMaxSize().background(Palette.bg).padding(PADDING_DP.dp)) {
-        Row(GlanceModifier.fillMaxWidth()) {
-            Text(
-                text = context.getString(R.string.w_ls_prompt),
-                style = style(Palette.prompt, sp),
-                maxLines = 1,
-                modifier = GlanceModifier.defaultWeight(),
-            )
-            Text(
-                "[${glyphs.settings}]",
-                style = style(Palette.dim, sp),
-                modifier = GlanceModifier.clickable(settings).padding(horizontal = 6.dp, vertical = 2.dp),
-            )
-            Text(
-                "[x]",
-                style = style(Palette.dim, sp),
-                modifier = GlanceModifier.clickable(actionRunCallback<CloseRepoListCallback>()).padding(horizontal = 6.dp, vertical = 2.dp),
-            )
-        }
-        val meta = buildList {
-            list.fetchedAt?.let { add(context.getString(R.string.w_age_ago, formatAge(it, now))) }
-            if (list.refreshing) add("[...]")
-            list.error?.let { add(it.widgetText(context)) }
-        }.joinToString(" · ")
-        if (meta.isNotEmpty()) Text(meta, style = style(Palette.dim, sp), maxLines = 1)
-        when {
-            list.repos.isEmpty() -> Text(
-                context.getString(if (list.refreshing || list.fetchedAt == null && list.error == null) R.string.w_loading else R.string.w_no_repos),
-                style = style(Palette.dim, sp),
-            )
-            else -> LazyColumn(GlanceModifier.fillMaxSize()) {
-                items(list.repos.indices.toList()) { i ->
-                    val r = list.repos[i]
-                    val mark = if (r.fullName == current) "> " else "  "
-                    val color = when {
-                        r.fullName == current -> Palette.prompt
-                        r.archived -> Palette.dim
-                        else -> Palette.fg
-                    }
-                    Text(
-                        text = mark + r.fullName,
-                        style = style(color, sp),
-                        maxLines = 1,
-                        modifier = GlanceModifier.fillMaxWidth().clickable(
-                            actionRunCallback<PickRepoCallback>(
-                                actionParametersOf(PickRepoCallback.REPO_KEY to r.fullName, PickRepoCallback.TOKEN_KEY to r.tokenId),
-                            ),
-                        ),
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun Rows(
-    context: Context,
-    appWidgetId: Int,
-    repo: String,
-    snapshot: RepoSnapshot,
-    now: Instant,
-    glyphs: Glyphs,
-    display: DisplaySettings,
-    widthDp: Float,
-    fontScale: Float,
-) {
-    val sp = display.fontSizeSp
-    val rows = selectBranches(snapshot.branches, display.viewOptions(), now).rows
-    if (rows.isEmpty()) {
-        Text(context.getString(R.string.w_no_runs), style = style(Palette.dim, sp))
-        return
-    }
-    val cellGlyphs = glyphs.cellGlyphs(display.glyphStyle)
-    val cells = rows.map { cellsFor(it, now, cellGlyphs) }
-    // One character of safety margin: some launchers report sizes a few dp off (RESEARCH.md R2).
-    val cpl = (charsPerLine(widthDp, 2f * PADDING_DP, sp.toFloat(), fontScale, Glyphs.advanceRatio) - 1).coerceAtLeast(0)
-    val fitted = fitColumns(display.columns, cells, cpl)
-    if (fitted.isEmpty()) return
-    LazyColumn(GlanceModifier.fillMaxSize()) {
-        items(rows.indices.toList()) { i ->
-            val b = rows[i]
-            val url = rowUrl(repo, b)
-            val segments = rowSegments(fitted, renderRow(fitted, cells[i]))
-            Row(GlanceModifier.fillMaxWidth().clickable(actionStartActivity(viewIntent(appWidgetId, url)))) {
-                segments.forEach { seg ->
-                    when (seg.role) {
-                        SegmentRole.STATUS -> Text(seg.text, style = style(statusColor(b.status), sp), maxLines = 1)
-                        SegmentRole.FG -> Text(seg.text, style = style(Palette.fg, sp), maxLines = 1)
-                        SegmentRole.DIM -> Text(seg.text, style = style(Palette.dim, sp), maxLines = 1)
-                        SegmentRole.COPY -> Text(
-                            seg.text,
+    val repo = config.repo
+    val rows = if (repo != null && tokenState != null) selectBranches(snapshot?.branches.orEmpty(), display.viewOptions(), now).rows else emptyList()
+    Column(GlanceModifier.fillMaxSize().background(Palette.bg).padding(6.dp)) {
+        Text("~$", style = style(Palette.prompt, sp + 2), modifier = GlanceModifier.clickable(UiAction.OpenWide.toGlance(context, appWidgetId)).padding(bottom = 2.dp))
+        if (repo != null) {
+            LazyColumn(GlanceModifier.fillMaxWidth()) {
+                items(rows.indices.toList()) { i ->
+                    val b = rows[i]
+                    val url = rowUrl(repo, b)
+                    val open = UiAction.Open(url).toGlance(context, appWidgetId)
+                    Column(GlanceModifier.fillMaxWidth().padding(top = 6.dp)) {
+                        Text(glyphs.statusLabel(b.status, display.glyphStyle), style = style(statusRole(b.status).color(), sp), modifier = GlanceModifier.clickable(open))
+                        Text(b.representative?.let { "#${it.runNumber}" } ?: "—", style = style(Palette.dim, sp), modifier = GlanceModifier.clickable(open))
+                        Text(
+                            "[${glyphs.copy}]",
                             style = style(Palette.dim, sp),
-                            maxLines = 1,
-                            modifier = GlanceModifier.clickable(actionStartActivity(ActionActivity.copy(context, appWidgetId, b.branch, url))),
-                        )
-                        SegmentRole.SHARE -> Text(
-                            seg.text,
-                            style = style(Palette.dim, sp),
-                            maxLines = 1,
-                            modifier = GlanceModifier.clickable(
-                                actionStartActivity(ActionActivity.share(context, appWidgetId, b.branch, shareText(repo, b))),
-                            ),
+                            modifier = GlanceModifier.clickable(UiAction.Copy(b.branch, url).toGlance(context, appWidgetId)),
                         )
                     }
                 }

@@ -12,4 +12,11 @@ internal object Palette {
     val yellow = Color(0xFFE3B341)
     val green = Color(0xFF3FB950)
     val grey = Color(0xFF6E7681)
+    val link = Color(0xFF79C0FF)
+
+    /** Fill of the 1×1 tile per status (D28). */
+    val tileGreen = Color(0xFF1F6F33)
+    val tileRed = Color(0xFF8F2A2A)
+    val tileYellow = Color(0xFF7A5F12)
+    val tileGrey = Color(0xFF3B4048)
 }

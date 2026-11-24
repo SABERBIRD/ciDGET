@@ -2,11 +2,10 @@ package io.github.saberbird.cidget.data
 
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import io.github.saberbird.cidget.core.ColumnId
-import io.github.saberbird.cidget.core.DisplaySettings
+import io.github.saberbird.cidget.core.WidgetView
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import java.io.File
 import java.nio.file.Files
@@ -25,45 +24,46 @@ class SettingsRepositoryTest {
         val r = repo()
         r.setWidgetRepo(1, "o/a")
         r.setWidgetRepo(2, "o/b")
-        r.updateWidget(2) { it.copy(useGlobalDefaults = false, display = it.display.withFontSize(16)) }
+        r.updateWidget(2) { it.copy(display = it.display.withFontSize(16).withColumnMoved(ColumnId.AGE, -1)) }
         assertEquals("o/a", r.getWidgetRepo(1))
         assertEquals(setOf("o/a", "o/b"), r.reposInUse())
-        assertTrue(r.getWidgetConfig(1).useGlobalDefaults)
-        assertEquals(13, r.effectiveDisplay(1).first().fontSizeSp)
-        assertEquals(16, r.effectiveDisplay(2).first().fontSizeSp)
+        assertEquals(13, r.getWidgetConfig(1).display.fontSizeSp)
+        assertEquals(16, r.getWidgetConfig(2).display.fontSizeSp)
+        assertEquals(ColumnId.BRANCH, r.getWidgetConfig(1).display.columns[1].id)
+        assertEquals(ColumnId.AGE, r.getWidgetConfig(2).display.columns[1].id)
     }
 
-    @Test fun globalDefaultsChangeInheritingWidgetsOnly() = runBlocking<Unit> {
+    @Test fun pickingARepoReturnsToTheBranchList() = runBlocking<Unit> {
         val r = repo()
-        r.setWidgetRepo(1, "o/a")
-        r.setWidgetRepo(2, "o/b")
-        r.updateWidget(2) { it.copy(useGlobalDefaults = false, display = DisplaySettings().withFontSize(12)) }
-        r.updateGlobal { it.withFontSize(15).withColumnEnabled(ColumnId.AGE, false) ?: it }
-        assertEquals(15, r.effectiveDisplay(1).first().fontSizeSp)
-        assertFalse(r.effectiveDisplay(1).first().columns.single { it.id == ColumnId.AGE }.enabled)
-        assertEquals(12, r.effectiveDisplay(2).first().fontSizeSp)
-        assertTrue(r.effectiveDisplay(2).first().columns.single { it.id == ColumnId.AGE }.enabled)
+        r.updateWidget(1) { it.copy(view = WidgetView.REPOS) }
+        assertEquals(WidgetView.REPOS, r.getWidgetConfig(1).view)
+        r.setWidgetRepo(1, "o/a", "tok")
+        val c = r.getWidgetConfig(1)
+        assertEquals(WidgetView.BRANCHES, c.view)
+        assertEquals("tok", c.tokenId)
+        assertEquals("tok", r.tokenIdForRepo("o/a"))
     }
 
-    @Test fun copySettingsKeepsTargetRepo() = runBlocking<Unit> {
+    @Test fun viewAndSelectedColumnArePersisted() = runBlocking<Unit> {
         val r = repo()
-        r.setWidgetRepo(1, "o/a")
-        r.setWidgetRepo(2, "o/b")
-        r.updateWidget(1) { it.copy(useGlobalDefaults = false, display = it.display.withColumnMoved(ColumnId.AGE, -1).withFontSize(11)) }
-        r.copySettings(1, 2)
-        val c = r.getWidgetConfig(2)
-        assertEquals("o/b", c.repo)
-        assertFalse(c.useGlobalDefaults)
-        assertEquals(11, c.display.fontSizeSp)
-        assertEquals(r.getWidgetConfig(1).display, c.display)
+        r.updateWidget(3) { it.copy(view = WidgetView.ORDER, selected = ColumnId.AGE) }
+        val c = r.getWidgetConfig(3)
+        assertEquals(WidgetView.ORDER, c.view)
+        assertEquals(ColumnId.AGE, c.selected)
+    }
+
+    @Test fun storedDisplayIsRepairedOnRead() = runBlocking<Unit> {
+        val r = repo()
+        r.updateWidget(1) { it.copy(display = it.display.copy(fontSizeSp = 99)) }
+        assertEquals(16, r.getWidgetConfig(1).display.fontSizeSp)
+        assertTrue(r.getWidgetConfig(1).display.columns.any { it.id == ColumnId.BRANCH && it.enabled })
+        assertFalse(r.getWidgetConfig(1).display.columns.isEmpty())
     }
 
     @Test fun valuesArePersistedAndDeleteForgets() = runBlocking<Unit> {
         val r = repo()
         r.setWidgetRepo(7, "o/x")
-        r.updateGlobal { it.withFontSize(14) }
         assertEquals("o/x", r.getWidgetRepo(7))
-        assertEquals(14, r.globalDisplay().first().fontSizeSp)
         assertTrue(file.exists())
         r.deleteWidget(7)
         assertNull(r.getWidgetRepo(7))

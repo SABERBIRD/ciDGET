@@ -27,14 +27,14 @@ internal class Glyphs(private val hasGlyph: (String) -> Boolean) {
         Status.GREY -> grey
     }
 
-    /** Status label for a style: a glyph, or `[OK] [FAIL] [RUN] [--]` in bracket style. */
+    /** Status label for a style: a glyph, or `[O] [F] [R] [-]` in bracket style. */
     fun statusLabel(status: Status, style: GlyphStyle): String = when (style) {
         GlyphStyle.UNICODE -> forStatus(status)
         GlyphStyle.BRACKET -> when (status) {
-            Status.RED -> "[FAIL]"
-            Status.YELLOW -> "[RUN]"
-            Status.GREEN -> "[OK]"
-            Status.GREY -> "[--]"
+            Status.RED -> "[F]"
+            Status.YELLOW -> "[R]"
+            Status.GREEN -> "[O]"
+            Status.GREY -> "[-]"
         }
     }
 

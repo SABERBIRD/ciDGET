@@ -8,8 +8,8 @@ ciDGET is not on Google Play. You install the APK file from GitHub. Android 12 o
 1. On the phone, open <https://github.com/SABERBIRD/ciDGET/releases/latest>.
 2. Download `cidget-<version>.apk`.
 3. Open the downloaded file. If Android asks, allow **Install unknown apps** for your browser (or file manager), then tap **Install**.
-4. Long-press the home screen → **Widgets** → **ciDGET** → drag it to the screen. There is no app icon (D22): the settings open right away when you add the widget.
-5. Copy your token and tap the paste button ([how to create it](TOKEN.md); you can add several), then choose a repository. Later: long-press the widget → **Reconfigure**, or tap the repo name → `[⚙]`.
+4. Long-press the home screen → **Widgets** → **ciDGET** → drag it to the screen. There is no app icon (D22): the widget opens its settings (or the repo list) right away when you add it.
+5. Copy your token and tap the paste button ([how to create it](TOKEN.md); you can add several), then choose a repository. Later: long-press the widget → **Widget settings**, or tap the repo name → `[⚙]`. The language (English or Ukrainian) is a button in the settings.
 
 ## Updating
 
@@ -22,4 +22,4 @@ Every push builds a debug APK: *Actions* tab → latest **build** run → *Artif
 ## Removing
 
 - **Only a widget:** long-press it on the home screen → **Remove**.
-- **The whole app:** there is no launcher icon, so use widget settings (long-press → **Reconfigure**, or tap the repo name → `[⚙]`) → **[ uninstall ciDGET ]**, or Android Settings → Apps → ciDGET → Uninstall. Uninstalling also deletes the saved tokens.
+- **The whole app:** there is no launcher icon, so use widget settings (long-press → **Widget settings**, or tap the repo name → `[⚙]`) → `[Delete ciDGET]`, or Android Settings → Apps → ciDGET → Uninstall. Uninstalling also deletes the saved tokens.

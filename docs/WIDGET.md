@@ -25,10 +25,10 @@ The widget is built with Jetpack Glance (`GlanceAppWidget`). Platform limits beh
 
 | Status | Unicode style (default) | Bracket style |
 |---|---|---|
-| RED | `✗` | `[FAIL]` |
-| YELLOW | `●` | `[RUN]` |
-| GREEN | `✓` | `[OK]` |
-| GREY | `○` | `[--]` |
+| RED | `✗` | `[F]` |
+| YELLOW | `●` | `[R]` |
+| GREEN | `✓` | `[O]` |
+| GREY | `○` | `[-]` |
 
 `○` (empty circle) is used for every grey case: no CI on the latest commit (`NO_RUNS`), cancelled, skipped only, not loaded. Branches without runs are shown by default (D21); their other columns are blank and a tap opens the branch page.
 
@@ -61,8 +61,9 @@ In approximate-head mode (D8 fallback) the glyph gets a `~` suffix in the status
 
 | Class | Condition | Content |
 |---|---|---|
-| `TINY` | width < 100 dp **or** height < 2 × lineHeight + padding | One large glyph (about 60% of the smaller side, max 48 sp) in the status colour, plus `!` in a corner when there is an error. It shows the worst status of the repo, or of the pinned branch if the per-widget setting says so (D13). Tap opens the representative run. The refresh button is not shown. |
-| `LIST` | otherwise | Header, meta line, then a `LazyColumn` with all rows (scrolls). |
+| `TINY` (1×1) | width < 110 dp and height < 110 dp, **or** height < 2 × lineHeight + padding | A tile filled with the status colour, a small symbol and the run number (`#412`), plus `!` in a corner when there is an error. It shows the first pinned branch (the first row if none is pinned), the branch with the newest run, or the worst status, per the setting (D28). The tap opens the run, refreshes, or copies the run link, per the setting. |
+| `COLUMN` (1×2+) | width < 110 dp and height ≥ 110 dp | Blue `~$` on top (opens the wide full-screen terminal at the repo list), then per branch, flush left: symbol, run number, `[⧉]`, one under another. A tap on the symbol or number opens the run. |
+| `LIST` | otherwise | Terminal screens (D28): the body scrolls, the foot (header, `[<]`, `[x]`) is pinned at the bottom of every screen. |
 
 ## 3. Columns
 
@@ -138,12 +139,16 @@ If more than 8 text segments would result, all non-status text columns use `fg` 
 | Row | Open the representative run, or the branch page for `NO_RUNS` | `actionStartActivity(Intent(ACTION_VIEW, url))`. The GitHub app opens it through its App Link if installed, otherwise the browser does. No special casing. |
 | `[⧉]` | Copy the run URL | `actionStartActivity` → `ActionActivity` (translucent, `noHistory`, `excludeFromRecents`, `taskAffinity=""`, no animation): `ClipboardManager.setPrimaryClip`, then a Toast *only on API ≤ 32* (API 33+ shows its own clipboard confirmation), then `finish()`. |
 | `[↗]` | Share | Same `ActionActivity`: `startActivity(Intent.createChooser(ACTION_SEND text/plain, null))`, then `finish()`. Text: `CI ✗ testING/main #412 CI: https://github.com/…`, using the Unicode glyph even if the widget uses brackets. |
-| `[⟳]` | Refresh this repo | `actionRunCallback<RefreshCallback>` → enqueue expedited unique work `refresh:{owner}/{repo}` with `ExistingWorkPolicy.KEEP`. Show `[...]` immediately by writing `refreshing = true` to the repo state. |
-| Header prompt | Repo list (D24) | `actionRunCallback<OpenRepoListCallback>`: sets the widget's `repoListOpen` flag (DataStore) and queues the unique worker `repolist`. The widget then shows the repo list instead of the meta line and rows. Without a token the tap opens settings. |
-| `[⚙]` (repo list header) | Settings (D22, D27) | `actionStartActivity(WidgetConfigActivity)` (full-screen terminal theme, D26) with the `appWidgetId`: the same activity the launcher opens from the widget's reconfigure menu (tokens, repo picker with an `owner/repo` field, columns, display, copy-from). |
-| Repo row (list view) | Switch repo | `actionRunCallback<PickRepoCallback>` with the repo and token id: saves them in the widget's config, clears the flag, prunes snapshots, shows `[...]` and queues a refresh. |
-| `[x]` (list view) | Back | `actionRunCallback<CloseRepoListCallback>`: clears the flag. |
-| TINY widget | Open the representative run of the shown status | Same as a row. |
+| `[⟳]` | Refresh the repo list and every repo some widget shows | `UiCallback` (`kind = refresh`) → expedited unique work `refresh:{owner}/{repo}` per repo (`KEEP`) and `repolist`. Shows `[...]` immediately. |
+| Header prompt | Repo list (D24) | `UiCallback` (`view = REPOS`): stores the view in the widget's config and queues the unique worker `repolist`. Without a token the tap opens settings. |
+| `[⚙]` (repo list foot) | Settings (D22, D27, D28) | `UiCallback` (`view = SETTINGS`): the settings are a screen of the widget itself. |
+| Repo row (list view) | Switch repo | `UiCallback` (`pick`) with the repo and token id: one config write (repo, token, back to the branch list), prunes snapshots, shows `[...]` and queues a refresh. |
+| `[x]` | Back to the branch list | `UiCallback` (`view = BRANCHES`). |
+| `[Paste token]` | Save the token on the clipboard | `ActionActivity` (invisible): reads the clipboard once the window has focus, validates and saves the token, clears the clipboard, shows a toast, finishes. |
+| `[How to create a token↗]`, `[Repo↗]` | Open a page | `ACTION_VIEW` of the docs URL. |
+| `[Delete ciDGET]` | Uninstall | `ACTION_DELETE` for the package: the system's uninstall dialog. |
+| `~$` (COLUMN) and an empty TINY | Wide terminal | `WidgetConfigActivity` with the wide flag: the same screens full screen. |
+| TINY widget | Per the 1×1 setting (D28) | Open the run, refresh, or copy the run link. |
 
 All `PendingIntent`s are immutable. Every `Intent` carries the `appWidgetId` and a unique data URI or request code, so the intents of different rows and widgets don't collide.
 
@@ -157,14 +162,14 @@ All `PendingIntent`s are immutable. Every `Intent` carries the `appWidgetId` and
   org/service-api
 ```
 
-Terminal-style rows, the current repo marked `> ` in the prompt colour, archived repos dim. Rows come from `RepoListStore` (`files/repos.json`): the merged `/user/repos` of every `OK` token, each entry with the id of the token that sees it. The widget only reads this cache; the worker fills it when the view is opened, after a token change and in the settings picker. While the cache is empty the view shows `$ loading…`, errors show in the meta line (`! offline`, …) and the old list stays. The view is per widget (`repo_list_open_{id}`), survives reboots and is only shown in LIST size.
+The repo list is a screen like any other (its foot holds `~ $ ls repos`, `[⚙]`, `[x]` and the age of the list). Rows are terminal-style, the current repo marked `> ` in the prompt colour, archived repos dim. Rows come from `RepoListStore` (`files/repos.json`): the merged `/user/repos` of every `OK` token, each entry with the id of the token that sees it. The widget only reads this cache; the worker fills it when the view is opened, after a token change and in the settings picker. While the cache is empty the view shows `$ loading…`, errors show in the meta line (`! offline`, …) and the old list stays. The view is per widget (`repo_list_open_{id}`), survives reboots and is only shown in LIST size.
 
 ## 5. Instances and configuration
 
-- Each `appWidgetId` has its own `WidgetConfig` (ARCHITECTURE.md §4): repo, `useGlobalDefaults`, columns, font size, glyph style, theme, sort, pinned branches, filters, max rows, and the TINY source (worst-of-repo or pinned branch).
-- `useGlobalDefaults = true` (the default for a new widget): display settings come from the global defaults; editing them in the widget's settings switches the flag off.
-- The settings screens use the terminal look (D25): dark background, monospace, `[ button ]`, `[x]` toggles, `(*)` choices, `$ title` headers.
-- There is no launcher icon (D22). The configuration activity is the only settings UI: it is opened when the widget is added, from the widget's long-press "reconfigure" entry and from the `[⚙]` in the repo list header. Tapping the repo name opens the in-widget repo list (D24), not settings. (`android:configure`, `widgetFeatures="reconfigurable|configuration_optional"`) offers: pick a repo, *copy settings from widget …* (a list of other widget instances by repo name), or keep the global defaults.
+- Each `appWidgetId` has its own `WidgetConfig` (ARCHITECTURE.md §4): repo, token id, the screen it shows, the selected column, and the display settings (columns with on/priority/max chars, font size, glyph style, language, sort, pinned branches, filters, max rows, the 1×1 source and tap). There are **no global defaults** (D28); "Reset to defaults" restores one widget's display settings.
+- The settings are screens of the widget in the terminal look (D25, D28): `[<]`/`[x]` and the title are a foot pinned to the bottom; items are `[buttons]`, `[x]` switches and `(*)` radios; buttons wrap whole.
+- Screens: settings (tokens, columns, look, reset, repo link, delete), columns shown, order, width, priority, look (font, symbols with a legend), pinned branches, 1×1. In *order* and *priority* a tap selects a column and `[↑ Up] [↓ Down]` move it; both list only the columns that are shown. In *width* `auto` becomes `[−] n [+]`, a tap on `n` returns to auto.
+- There is no launcher icon (D22). The system's "widget settings" (`android:configure`, `widgetFeatures="reconfigurable|configuration_optional"`) opens `WidgetConfigActivity`: for a big enough widget it has no window, switches the widget to its settings (or to the repo list for a new widget without a repo), redraws the widget (the first update of a widget with a configuration activity may otherwise wait) and finishes; for a small widget it shows the same screens full screen.
 - When a widget is removed (`onDeleted`), delete its config. Repo caches that no widget references are deleted by the next refresh.
 
 ## 6. Provider XML

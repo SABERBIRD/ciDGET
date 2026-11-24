@@ -85,3 +85,17 @@ private fun statusOrder(s: Status): Int = when (s) {
     Status.GREY -> 2
     Status.GREEN -> 3
 }
+
+/**
+ * The row a one-glyph widget shows for [source] (D13, D28). [view] comes from [selectBranches] without a row
+ * limit, so pinned branches lead. `PINNED`: the first pinned branch that exists, else the first row.
+ * `LAST`: the branch with the newest activity. `WORST`: the first row with the worst status. Null for no rows.
+ */
+public fun tinyTarget(view: BranchView, source: TinySource, pinned: List<String>): BranchStatus? {
+    val rows = view.rows
+    return when (source) {
+        TinySource.PINNED -> pinned.firstNotNullOfOrNull { p -> rows.firstOrNull { it.branch == p } } ?: rows.firstOrNull()
+        TinySource.LAST -> rows.filter { it.lastActivity != null }.maxByOrNull { it.lastActivity ?: Instant.DISTANT_PAST } ?: rows.firstOrNull()
+        TinySource.WORST -> rows.firstOrNull { it.status == view.worst } ?: rows.firstOrNull()
+    }
+}

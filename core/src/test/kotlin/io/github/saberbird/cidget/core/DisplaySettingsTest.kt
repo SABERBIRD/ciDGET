@@ -49,17 +49,56 @@ class DisplaySettingsTest {
         assertEquals(16, n.fontSizeSp)
     }
 
-    @Test fun effectiveFollowsFlag() {
-        val global = DisplaySettings(fontSizeSp = 15)
-        val own = DisplaySettings(fontSizeSp = 12)
-        assertEquals(15, WidgetConfig(display = own).effective(global).fontSizeSp)
-        assertEquals(12, WidgetConfig(useGlobalDefaults = false, display = own).effective(global).fontSizeSp)
+    @Test fun movedVisibleJumpsOverDisabledColumns() {
+        // default order: STATUS BRANCH AGE RUN_NUMBER COPY SHARE WORKFLOW SHA(off) ...
+        val d = DisplaySettings().withColumnMovedVisible(ColumnId.WORKFLOW, 1)
+        assertEquals(DisplaySettings().columns.map { it.id }.let { l -> l.take(6) }, d.columns.take(6).map { it.id })
+        val up = DisplaySettings().withColumnEnabled(ColumnId.AGE, false)!!.withColumnMovedVisible(ColumnId.RUN_NUMBER, -1)
+        assertEquals(listOf(ColumnId.STATUS, ColumnId.RUN_NUMBER, ColumnId.BRANCH), up.columns.filter { it.enabled }.take(3).map { it.id })
+        val disabled = DisplaySettings().withColumnMovedVisible(ColumnId.SHA, -1)
+        assertEquals(DisplaySettings(), disabled)
+        assertEquals(DisplaySettings(), DisplaySettings().withColumnMovedVisible(ColumnId.STATUS, -1))
+    }
+
+    @Test fun priorityMovedSwapsRanksOfEnabledColumns() {
+        val d = DisplaySettings().withPriorityMoved(ColumnId.AGE, -1)
+        // AGE (70) was below BRANCH (90): now ranked directly under STATUS, above BRANCH.
+        assertEquals(listOf(ColumnId.STATUS, ColumnId.AGE, ColumnId.BRANCH), d.priorityRanking().take(3).map { it.id })
+        assertEquals(DisplaySettings(), DisplaySettings().withPriorityMoved(ColumnId.STATUS, -1))
+        val last = DisplaySettings().priorityRanking().last().id
+        assertEquals(DisplaySettings(), DisplaySettings().withPriorityMoved(last, 1))
+        assertEquals(DisplaySettings(), DisplaySettings().withPriorityMoved(ColumnId.SHA, -1))
+    }
+
+    @Test fun maxCharsStepStartsAtTheDefaultCapAndReturnsToAuto() {
+        var d = DisplaySettings().withColumnMaxCharsStep(ColumnId.BRANCH, 1)
+        assertEquals(40, d.columns.single { it.id == ColumnId.BRANCH }.maxChars)
+        d = d.withColumnMaxCharsStep(ColumnId.BRANCH, -1)
+        assertEquals(39, d.columns.single { it.id == ColumnId.BRANCH }.maxChars)
+        assertEquals(10, DisplaySettings().withColumnMaxCharsStep(ColumnId.COPY, 1).columns.single { it.id == ColumnId.COPY }.maxChars)
+        val one = DisplaySettings().withColumnMaxChars(ColumnId.BRANCH, 1).withColumnMaxCharsStep(ColumnId.BRANCH, -1)
+        assertNull(one.columns.single { it.id == ColumnId.BRANCH }.maxChars)
+        assertNull(DisplaySettings().withColumnMaxCharsStep(ColumnId.BRANCH, -1).columns.single { it.id == ColumnId.BRANCH }.maxChars)
+    }
+
+    @Test fun pinToggleKeepsPinOrder() {
+        val d = DisplaySettings().withPinToggled("dev").withPinToggled("main")
+        assertEquals(listOf("dev", "main"), d.pinned)
+        assertEquals(listOf("main"), d.withPinToggled("dev").pinned)
+    }
+
+    @Test fun newDefaults() {
+        val d = DisplaySettings()
+        assertEquals(TinySource.PINNED, d.tinySource)
+        assertEquals(TinyTap.RUN, d.tinyTap)
+        assertEquals(Language.EN, d.language)
+        assertEquals(WidgetView.BRANCHES, WidgetConfig().view)
     }
 
     @Test fun jsonRoundTripAndUnknownKeys() {
         val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
-        val c = WidgetConfig("o/r", "tok1", false, DisplaySettings(fontSizeSp = 14, glyphStyle = GlyphStyle.BRACKET, pinned = listOf("main")))
+        val c = WidgetConfig("o/r", "tok1", DisplaySettings(fontSizeSp = 14, glyphStyle = GlyphStyle.BRACKET, pinned = listOf("main"), language = Language.UK), WidgetView.ORDER, ColumnId.AGE)
         assertEquals(c, json.decodeFromString(WidgetConfig.serializer(), json.encodeToString(WidgetConfig.serializer(), c)))
-        assertEquals(WidgetConfig("x/y"), json.decodeFromString(WidgetConfig.serializer(), """{"repo":"x/y","future":1}"""))
+        assertEquals(WidgetConfig("x/y"), json.decodeFromString(WidgetConfig.serializer(), """{"repo":"x/y","future":1,"useGlobalDefaults":true}"""))
     }
 }
